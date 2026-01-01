@@ -1,0 +1,6 @@
+dropout: 0.2
+hidden_dim: 64
+input_dim: 4
+lr: 0.001
+num_layers: 2
+output_dim: 3

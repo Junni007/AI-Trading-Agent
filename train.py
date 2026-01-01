@@ -14,7 +14,16 @@ logger = logging.getLogger("TrainMVP")
 
 def main():
     # 0. Configuration
-    BATCH_SIZE = 32
+    # Auto-scale batch size if GPU is available (Colab T4 has ~15GB VRAM usually)
+    if torch.cuda.is_available():
+        BATCH_SIZE = 64 # Larger batch for better stability
+        ACCELERATOR = "gpu"
+        PRECISION = "16-mixed" # Faster training on T4
+    else:
+        BATCH_SIZE = 32
+        ACCELERATOR = "cpu"
+        PRECISION = "32-true"
+
     MAX_EPOCHS = 50
     TICKER = "AAPL"
     
@@ -30,16 +39,9 @@ def main():
     train_dataset = TensorDataset(torch.FloatTensor(X_train), torch.LongTensor(y_train))
     val_dataset = TensorDataset(torch.FloatTensor(X_val), torch.LongTensor(y_val))
     
-    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True) # Shuffle ok for training batches in generic ML, but strictly sequence is already built.
-    # Note: Shuffling batches does not break time series order within the sample (window). 
-    # It removes correlation between batches which is usually good.
-    val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False)
-    
-    logger.info(f"Train batches: {len(train_loader)}, Val batches: {len(val_loader)}")
-    
     # 2. Model Setup
     input_dim = X_train.shape[2]
-    model = LSTMPredictor(input_dim=input_dim, hidden_dim=64, num_layers=2, output_dim=3)
+    model = LSTMPredictor(input_dim=input_dim, hidden_dim=128, num_layers=2, output_dim=3) # Increased hidden/layers for "Best Model"
     
     # 3. Callbacks
     checkpoint_callback = ModelCheckpoint(
@@ -52,7 +54,7 @@ def main():
     
     early_stop_callback = EarlyStopping(
         monitor="val_loss",
-        patience=8,
+        patience=10, # Longer patience
         verbose=True,
         mode="min"
     )
@@ -61,8 +63,9 @@ def main():
     trainer = pl.Trainer(
         max_epochs=MAX_EPOCHS,
         callbacks=[checkpoint_callback, early_stop_callback],
-        accelerator="auto", # Should detect GPU/CPU
+        accelerator=ACCELERATOR,
         devices=1,
+        precision=PRECISION, # Mixed precision
         enable_progress_bar=True,
         log_every_n_steps=5
     )
