@@ -5,6 +5,7 @@ from torch.utils.data import TensorDataset, DataLoader
 import numpy as np
 import logging
 import os
+import json
 
 from src.data_loader import MVPDataLoader
 from src.lstm_model import LSTMPredictor
@@ -39,18 +40,44 @@ def main():
     
     X_train, y_train = splits['train']
     X_val, y_val = splits['val']
+    X_test, y_test = splits['test']
     
     # Convert to Tensors
     train_dataset = TensorDataset(torch.FloatTensor(X_train), torch.LongTensor(y_train))
     val_dataset = TensorDataset(torch.FloatTensor(X_val), torch.LongTensor(y_val))
+    test_dataset = TensorDataset(torch.FloatTensor(X_test), torch.LongTensor(y_test))
     
-    # High-Performance Loader
-    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=2, persistent_workers=True)
-    val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=2, persistent_workers=True)
+    # High-Performance Loader (num_workers=0 to prevent deadlocks in Colab)
+    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=0, persistent_workers=False)
+    val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=0, persistent_workers=False)
+    test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=0, persistent_workers=False)
     
     # 2. Model Setup (Deep LSTM)
     input_dim = X_train.shape[2]
-    model = LSTMPredictor(input_dim=input_dim, hidden_dim=256, num_layers=3, output_dim=3) # Increased hidden/layers for "Best Model"
+    
+    # Load Best Hyperparameters if available
+    hp_file = "best_hyperparameters.json"
+    if os.path.exists(hp_file):
+        logger.info(f"Loading optimized hyperparameters from {hp_file}")
+        with open(hp_file, "r") as f:
+            params = json.load(f)
+            hidden_dim = params.get("hidden_dim", 256)
+            num_layers = params.get("num_layers", 3)
+            dropout = params.get("dropout", 0.2)
+            lr = params.get("lr", 0.001)
+            # Note: Batch Size optimization requires restart of loader, we skip for now or set earlier.
+    else:
+        logger.info("Using default hyperparameters (Deep LSTM)")
+        hidden_dim, num_layers, dropout, lr = 256, 3, 0.2, 0.001
+
+    model = LSTMPredictor(
+        input_dim=input_dim, 
+        hidden_dim=hidden_dim, 
+        num_layers=num_layers, 
+        output_dim=3,
+        dropout=dropout,
+        lr=lr
+    )
     
     # 3. Callbacks
     checkpoint_callback = ModelCheckpoint(
@@ -85,19 +112,50 @@ def main():
     
     logger.info(f"Best model path: {checkpoint_callback.best_model_path}")
     
-    # 6. Save TorchScript/Final for inference
-    # Load best
+    # 6. Evaluation (The missing piece on local disk)
+    logger.info("Loading Best Model for Evaluation...")
     best_model = LSTMPredictor.load_from_checkpoint(checkpoint_callback.best_model_path)
-    best_model.eval()
     
-    # Trace for faster inference/portability
-    # example_input = torch.rand(1, 50, input_dim)
-    # traced = torch.jit.trace(best_model, example_input)
-    # torch.jit.save(traced, "final_lstm_model.pt")
+    # Determine device
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    best_model.to(device)
     
-    # Just save weights for now
+    # Run Test Evaluation
+    evaluate_model(best_model, test_loader, device)
+
+    # 7. Save Final
     torch.save(best_model.state_dict(), "final_lstm_model.pth")
     logger.info("Model saved to final_lstm_model.pth")
+
+def evaluate_model(model, dataloader, device):
+    """Runs evaluation on the test set and prints metrics."""
+    from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
+    
+    model.eval()
+    all_preds = []
+    all_targets = []
+    
+    with torch.no_grad():
+        for x, y in dataloader:
+            x = x.to(device)
+            logits = model(x)
+            preds = torch.argmax(logits, dim=1).cpu().numpy()
+            all_preds.extend(preds)
+            all_targets.extend(y.numpy())
+            
+    # Metrics
+    acc = accuracy_score(all_targets, all_preds)
+    print("\n" + "="*40)
+    print(f"📊 FINAL TEST RESULTS (2024 Data)")
+    print("="*40)
+    print(f"✅ Accuracy: {acc:.4f}\n")
+    
+    print("📉 Classification Report:")
+    print(classification_report(all_targets, all_preds, target_names=["DOWN", "NEUTRAL", "UP"]))
+    
+    print("\nHz Confusion Matrix:")
+    print(confusion_matrix(all_targets, all_preds))
+    print("="*40 + "\n")
 
 if __name__ == "__main__":
     main()

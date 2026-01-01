@@ -7,7 +7,19 @@ def get_sp500_tickers():
     """Scrapes S&P 500 tickers from Wikipedia."""
     try:
         url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-        tables = pd.read_html(url)
+        
+        # Antibot Fix: Use User-Agent header
+        import requests
+        from io import StringIO
+        
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        }
+        
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        
+        tables = pd.read_html(StringIO(response.text))
         df = tables[0]
         tickers = df['Symbol'].tolist()
         # Fix for Yahoo Finance (BF.B -> BF-B)

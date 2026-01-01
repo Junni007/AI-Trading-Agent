@@ -105,18 +105,12 @@ logger = logging.getLogger(__name__)
         """
         if df.empty: return np.array([]), np.array([])
         
-        feature_cols = ['Close', 'RSI', 'MACD', 'Log_Return']
+        # FIX: Remove 'Close' price. It is non-stationary and scaling varies wildly between tickers.
+        # Using it prevents the model from learning general patterns across 500+ stocks.
+        feature_cols = ['RSI', 'MACD', 'MACD_Signal', 'Log_Return']
         data = df[feature_cols].values
         targets = df['Target'].values
         
-        # Normalization
-        # Note: If handling multiple tickers, global scaling implies they have similar range or we use log returns mostly.
-        # 'Close' price varies wildly (100 vs 3000). StandardScaling 'Close' globally is bad if mixing AAPL and AMZN.
-        # Better: Scale PER TICKER or use % change inputs only.
-        # For this Student MVP, let's Stick to Fitting on the specific ticker's train data passed in here? 
-        # But get_data_splits iterates tickers. 
-        # Ideally we want a Global Scaler that sees ALL training data? Or Scale per ticker?
-        # Scale Per Ticker is safer for distribution.
         # However, `self.scalers` is a single dict.
         # Let's fit a NEW scaler for each ticker? Or reuse?
         # Re-using a single global scaler for Price is bad.
