@@ -41,3 +41,10 @@ frontend/yarn-error.log*
 # Mac / Windows
 .DS_Store
 Thumbs.db
+
+# Optimization & Logs
+optuna_study.db
+tune_errors.log
+training.log
+lightning_logs/
+best_hyperparameters.json

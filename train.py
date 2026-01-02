@@ -13,16 +13,39 @@ from src.ticker_utils import get_extended_tickers
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("TrainMassive")
+# Add file handler
+fh = logging.FileHandler('training.log')
+fh.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+fh.setFormatter(formatter)
+logger.addHandler(fh)
 
 def main():
     # 0. Configuration
-    # Auto-scale batch size if GPU is available (Colab T4 has ~15GB VRAM usually)
-    if torch.cuda.is_available():
-        BATCH_SIZE = 64 # Larger batch for better stability
-        ACCELERATOR = "gpu"
-        PRECISION = "16-mixed" # Faster training on T4
+    # Load Best Hyperparameters FIRST
+    hp_file = "best_hyperparameters.json"
+    best_params = {}
+    if os.path.exists(hp_file):
+        logger.info(f"Loading optimized hyperparameters from {hp_file}")
+        with open(hp_file, "r") as f:
+            best_params = json.load(f)
+    else:
+        logger.info("No optimized hyperparameters found. Using defaults.")
+
+    # Determine Batch Size (Priority: Optimized > Hardware Default)
+    if "batch_size" in best_params:
+        BATCH_SIZE = int(best_params["batch_size"])
+        logger.info(f"Using optimized BATCH_SIZE={BATCH_SIZE}")
+    elif torch.cuda.is_available():
+        BATCH_SIZE = 64 
     else:
         BATCH_SIZE = 32
+
+    # Hardware Setup
+    if torch.cuda.is_available():
+        ACCELERATOR = "gpu"
+        PRECISION = "16-mixed" 
+    else:
         ACCELERATOR = "cpu"
         PRECISION = "32-true"
 
@@ -58,14 +81,12 @@ def main():
     # Load Best Hyperparameters if available
     hp_file = "best_hyperparameters.json"
     if os.path.exists(hp_file):
-        logger.info(f"Loading optimized hyperparameters from {hp_file}")
-        with open(hp_file, "r") as f:
-            params = json.load(f)
-            hidden_dim = params.get("hidden_dim", 256)
-            num_layers = params.get("num_layers", 3)
-            dropout = params.get("dropout", 0.2)
-            lr = params.get("lr", 0.001)
-            # Note: Batch Size optimization requires restart of loader, we skip for now or set earlier.
+        logger.info(f"Using optimized hyperparameters from {hp_file}")
+        # Use params loaded earlier in main()
+        hidden_dim = best_params.get("hidden_dim", 256)
+        num_layers = best_params.get("num_layers", 3)
+        dropout = best_params.get("dropout", 0.2)
+        lr = best_params.get("lr", 0.001)
     else:
         logger.info("Using default hyperparameters (Deep LSTM)")
         hidden_dim, num_layers, dropout, lr = 256, 3, 0.2, 0.001
@@ -85,7 +106,8 @@ def main():
         filename="lstm-{epoch:02d}-{val_loss:.2f}",
         save_top_k=1,
         monitor="val_loss",
-        mode="min"
+        mode="min",
+        save_last=True  # Important for resuming
     )
     
     early_stop_callback = EarlyStopping(
@@ -107,8 +129,16 @@ def main():
     )
     
     # 5. Train
+    # 5. Train
     logger.info("Starting Training...")
-    trainer.fit(model, train_loader, val_loader)
+    
+    # Auto-Resume Logic
+    last_ckpt = "checkpoints_mvp/last.ckpt"
+    ckpt_path = last_ckpt if os.path.exists(last_ckpt) else None
+    if ckpt_path:
+        logger.info(f"Resuming training from {ckpt_path}")
+    
+    trainer.fit(model, train_loader, val_loader, ckpt_path=ckpt_path)
     
     logger.info(f"Best model path: {checkpoint_callback.best_model_path}")
     
