@@ -95,7 +95,7 @@ def main():
         input_dim=input_dim, 
         hidden_dim=hidden_dim, 
         num_layers=num_layers, 
-        output_dim=3,
+        output_dim=2, # Binary Classification (Down, Up)
         dropout=dropout,
         lr=lr
     )
@@ -181,7 +181,8 @@ def evaluate_model(model, dataloader, device):
     print(f"✅ Accuracy: {acc:.4f}\n")
     
     print("📉 Classification Report:")
-    print(classification_report(all_targets, all_preds, target_names=["DOWN", "NEUTRAL", "UP"]))
+    # Binary Classification: Only 2 classes
+    print(classification_report(all_targets, all_preds, target_names=["DOWN", "UP"]))
     
     print("\nHz Confusion Matrix:")
     print(confusion_matrix(all_targets, all_preds))

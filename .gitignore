@@ -48,3 +48,7 @@ tune_errors.log
 training.log
 lightning_logs/
 best_hyperparameters.json
+
+# Classical Models & Stacking
+*.pkl
+*.npy

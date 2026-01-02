@@ -1,40 +1,49 @@
-# Project Manual & Architecture Guide
+# Project Manual & Architecture Guide (Phase 2)
 
 ## 1. Project Overview
-**Goal**: Build a scalable AI Trading Agent capable of predicting market direction (Up/Down/Neutral) using deep learning (LSTM) and potentially Topological Data Analysis (TDA) features.
-**Status**: Prototyping / MVP Phase.
-**Tech Stack**: PyTorch, PyTorch Lightning, Optuna, FastAPI, React.
+**Goal**: Build a "High Precision" Autonomous Trading Agent ("The Sniper").
+**Philosophy**: Shift from "Predicting Direction" (50% Accuracy) to "Reacting to Volatility" (High Confidence Setups).
+**Core Metrics**:
+- **Win Rate**: >60% (Target).
+- **Profit Factor**: >1.5.
+- **Method**: Intraday Momentum & Options Income.
 
 ## 2. Architecture
 
-### Core Modules (`src/`)
-- **`tune.py`**: Hyperparameter optimization using Optuna.
-    - *Key Features*: SQLite Checkpointing, Error Handling, Pruning.
-    - *Output*: `best_hyperparameters.json`.
-- **`lstm_model.py`**: The neural network definition.
-    - *Type*: 2-Layer LSTM with Dropout and fully connected head.
-    - *Framework*: PyTorch LightningModule.
-- **`data_loader.py`**: Handles data fetching (yfinance), splitting (Train/Val/Test), and windowing.
-    - *Strict Splitting*: Train (2018-2022), Val (2023), Test (2024).
-- **`agent.py`**: Reinforcement Learning (PPO) agent implementation (Prototype stage).
-- **`ticker_utils.py`**: Utilities for fetching ticker symbols (S&P 500, Nifty 50).
+### Core Engines
+1.  **Strategy Scanner (`scan_strategies.py`)**:
+    - *Timeframe*: Daily.
+    - *Purpose*: Filters the "Universe" (500+ stocks) for specific setups (Hammer, Engulfing).
+    - *Output*: Watchlist for the next day.
+2.  **Intraday Sniper (`scan_intraday.py` - Active)**:
+    - *Timeframe*: 15-minute / 5-minute.
+    - *Purpose*: Executing the "Sniper" trade.
+    - *Triggers*: VWAP cross, RSI Momentum, Volume Spikes.
+3.  **Derivatives Engine (`scan_volatility.py` - Active)**:
+    - *Purpose*: Generating income from "Neutral" stocks via Option Selling (HV Rank).
 
-### Pipelines
-1. **tuning**: `src/tune.py` -> Optimizes params -> `best_hyperparameters.json`
-2. **training**: `train.py` -> Loads data + best params -> Trains LSTM -> Saves `final_lstm_model.pth`
-3. **serving**: `app/main.py` -> Serves model predictions via API.
-4. **dashboard**: `frontend/` -> Visualizes predictions.
+### Data Pipeline (`src/`)
+- **`data_loader.py`**: Handles Daily data fetching & Feature Engineering (RSI, EMA, Patterns).
+- **`data_loader_intraday.py`**: Handles Live 15m/5m data fetching (Robust w/ Auto-Retry).
+- **`patterns.py`**: Pure Python implementation of Candlestick Patterns (No `talib` dependency).
+- **`ticker_utils.py`**: Manages S&P 500 & Nifty 50 ticker lists.
 
-## 3. Development Rules (Strict Adherence)
-1.  **Root Cause Analysis**: No patch work. Fix problems permanently at the source.
-2.  **Simplicity**: Find the easiest, most viable route. Do not overcomplicate.
-3.  **Documentation & Truth**: Do not hallucinate. Verify facts. Update documentation (`docs/`) to keep context aligned.
-4.  **senior Quality**: Write viable, long-lasting, production-grade code.
+## 3. Development Rules
+1.  **Deterministic Logic**: No "Black Box" Neural Networks. All rules must be explainable (e.g., "Bought because RSI < 30").
+2.  **Managed Outcomes**: Every trade *must* have a systematic Stop Loss and Take Profit in the backtest logic.
+3.  **Clean Code**: Keep modules focused. One script = One job.
 
-## 4. Current State
-- `tune.py` has been patched to support resuming (checkpoints) and robust error handling.
-- `train.py` is ready for massive training but requires careful resource management on local/Colab.
-- `optuna` dependency is required for tuning.
+## 4. Current State (Jan 2026)
+- **Daily Scanner**: **Active**. Scans 550 tickers.
+- **Intraday Engine**: **Active**. (Expert 1).
+- **Volatility Engine**: **Active**. (Expert 2).
+- **Hybrid Brain**: **Active**. (`scan_hybrid.py` Aggregator).
+- **Legacy ML**: **Deprecated**. All LSTM/XGBoost models moved to `archive/`.
 
-## 5. Theory References
-- `docs/TDA_THEORY.md`: Explains the use of Algebraic Topology for feature extraction.
+## 5. Strategic Roadmap
+- **Step 1**: Build Intraday Scanner for "Momentum" (The Snipe). [COMPLETED]
+- **Step 2**: Build Volatility Scanner for "Income" (The Hedge). [COMPLETED]
+- **Step 3**: Combine into a "Live Dashboard" (`scan_hybrid.py`). [COMPLETED]
+
+---
+*Reference: See `experiments_log.md` for the failure analysis of the LSTM approach.*

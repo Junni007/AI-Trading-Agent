@@ -70,34 +70,86 @@ class MVPDataLoader:
         # So df_ticker is already clean.
         return self.feature_engineering(df_ticker)
 
-    def feature_engineering(self, df: pd.DataFrame) -> pd.DataFrame:
+    feature_cols: list = None
+
+    def feature_engineering(self, df: pd.DataFrame, return_raw: bool = False) -> pd.DataFrame:
         """Adds Technical Indicators (RSI, MACD) and Targets."""
         if len(df) < 50: return pd.DataFrame() # Skip if too short
         
         df = df.copy()
         try:
+            # ... (Existing Logic) ...
+            
+            # --- Technicals & Features (Lines 80-123) ---
+            # ... (Implicitly kept) ...
+            
             # 1. Technical Indicators
             df['RSI'] = RSIIndicator(df['Close'], window=14).rsi()
             macd = MACD(df['Close'])
             df['MACD'] = macd.macd()
             df['MACD_Signal'] = macd.macd_signal()
             
-            # 2. Returns
+            # 2. Features
+            # --- Trends ---
+            df['EMA_20'] = df['Close'].ewm(span=20, adjust=False).mean()
+            df['EMA_50'] = df['Close'].ewm(span=50, adjust=False).mean()
+            df['Trend_Signal'] = (df['Close'] - df['EMA_50']) / df['EMA_50']
+            
+            # --- Volatility ---
+            high_low = df['High'] - df['Low']
+            high_close = np.abs(df['High'] - df['Close'].shift())
+            low_close = np.abs(df['Low'] - df['Close'].shift())
+            tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+            df['ATR'] = tr.rolling(window=14).mean() / df['Close']
+            
+            # --- Volume ---
+            df['Log_Vol'] = np.log(df['Volume'] + 1)
+            df['Vol_Change'] = df['Log_Vol'].diff()
+
+            # --- Base Methods ---
+            df['RSI'] = self.calculate_rsi(df['Close'])
+            df['MACD'], df['MACD_Signal'] = self.calculate_macd(df['Close'])
             df['Log_Return'] = np.log(df['Close'] / df['Close'].shift(1))
             
-            # 3. Target: Next Day Direction
-            threshold = 0.002
+            # 3. Target
             future_ret = df['Log_Return'].shift(-1)
-            conditions = [(future_ret < -threshold), (future_ret > threshold)]
-            choices = [0, 2] 
-            df['Target'] = np.select(conditions, choices, default=1)
+            mask = future_ret.notna()
+            try:
+                df.loc[mask, 'Target'] = pd.qcut(future_ret[mask], 2, labels=[0, 1])
+            except ValueError:
+                median_ret = future_ret.median()
+                df.loc[mask, 'Target'] = (future_ret[mask] > median_ret).astype(int)
             
             df.dropna(inplace=True)
+            df['Target'] = df['Target'].astype(int) 
+            
+            # Select Final Feature Set
+            self.feature_cols = ['RSI', 'MACD', 'MACD_Signal', 'Log_Return', 'Trend_Signal', 'ATR', 'Vol_Change']
+            
+            if return_raw:
+                return df # Returns everything including Open, High, Low, Pattern cols if any
+            else:
+                return df[self.feature_cols + ['Target']]
+            
         except Exception as e:
             logger.warning(f"Feature engineering failed: {e}")
             return pd.DataFrame()
             
         return df
+
+    def calculate_rsi(self, series: pd.Series, window: int = 14) -> pd.Series:
+        delta = series.diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
+        rs = gain / loss
+        return 100 - (100 / (1 + rs))
+
+    def calculate_macd(self, series: pd.Series, slow: int = 26, fast: int = 12, signal: int = 9) -> Tuple[pd.Series, pd.Series]:
+        exp1 = series.ewm(span=fast, adjust=False).mean()
+        exp2 = series.ewm(span=slow, adjust=False).mean()
+        macd = exp1 - exp2
+        signal_line = macd.ewm(span=signal, adjust=False).mean()
+        return macd, signal_line
 
     def create_sequences(self, df: pd.DataFrame, dataset_type: str = 'train') -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -108,8 +160,10 @@ class MVPDataLoader:
         
         # FIX: Remove 'Close' price. It is non-stationary and scaling varies wildly between tickers.
         # Using it prevents the model from learning general patterns across 500+ stocks.
-        feature_cols = ['RSI', 'MACD', 'MACD_Signal', 'Log_Return']
-        data = df[feature_cols].values
+        feature_cols = ['RSI', 'MACD', 'MACD_Signal', 'Log_Return', 'Trend_Signal', 'ATR', 'Vol_Change']
+        # Check if columns exist (handle subsets)
+        available_cols = [c for c in feature_cols if c in df.columns]
+        data = df[available_cols].values
         targets = df['Target'].values
         
         # However, `self.scalers` is a single dict.

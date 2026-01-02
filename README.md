@@ -1,76 +1,52 @@
-# AI Trading Agent (Student MVP)
+# 🦅 AI Trading Agent (The "Thinker" Engine)
 
-![Status](https://img.shields.io/badge/Status-Prototyping-orange)
-![Tech](https://img.shields.io/badge/Stack-PyTorch%20|%20FastAPI%20|%20React-blue)
+## Overview
+This project is an **Autonomous Trading Agent** built on a **Mixture of Experts (MoE)** architecture.
+It moved away from "Black Box" Neural Networks (which drift with the market) to a **Hybrid Thinking Model** that dynamically switches between "Sniper" (Intraday Momentum) and "Income" (Volatility Selling) strategies.
 
-A **Directional Prediction LSTM Model** for S&P 500/AAPL stocks, featuring strict Time-Series validation and a web dashboard. Built as a portfolio project demonstration.
+## 🚀 Core Philosophy
+- **Thinking, Not Guessing**: The system does not output a price. It outputs a **Vote** and a **Reason**.
+- **Context is King**: High Volatility = Option Selling. Low Volatility = Directional Sniping.
+- **Managed Outcomes**: Every trade has a specific Regime context.
 
-## 🎯 Key Features
-*   **Neural Network**: 2-Layer LSTM trained to predict Up/Down/Neutral trends.
-*   **Strict Splitting**:
-    *   Train: 2019-2022
-    *   Validation: 2023
-    *   Test: 2024 (Unseen)
-*   **Web Dashboard**: React frontend + FastAPI backend to visualize live forecasts.
-*   **Backtesting Engine**: Simulates 2024 performance vs "Buy & Hold".
+## 🛠️ Modules (The Brain)
 
-## 🛠️ Setup & Usage
+### 1. Hybrid Brain (`scan_hybrid.py`)
+- **Purpose**: The Master Controller. Aggregates votes from Experts 1 & 2.
+- **Output**: A "Thinking Process" report (e.g., "High Volatility -> Conflict -> Bull Put Spread").
 
-### 1. Installation
+### 2. Expert 1: Sniper Engine (`scan_intraday.py`)
+- **Purpose**: Scans 15-minute candles for Momentum (VWAP Cross + Volume Spike).
+- **Goal**: Catch the +2% Intraday Moves.
+
+### 3. Expert 2: Income Engine (`scan_volatility.py`)
+- **Purpose**: Scans Daily History for Volatility Rank (HV).
+- **Goal**: Sell Premium (Iron Condors) when Volatility is High (>80%).
+
+### 4. Daily Strategy Scanner (`scan_strategies.py`)
+- **Purpose**: Legacy Daily Chart patterns (Hammer, Engulfing).
+- **Use**: Best for finding long-term candidates.
+
+## 📦 Installation
 ```bash
-# Clone
-git clone https://github.com/Junni007/AI-Trading-Agent.git
-cd AI-Trading-Agent
-
-# Install Python requirements
 pip install -r requirements.txt
-
-# Install Frontend dependencies (Requires Node.js)
-cd frontend
-npm install
-cd ..
 ```
 
-### 2. Hyperparameter Tuning (Optional)
-Find the best model configuration using Optuna.
+## 🏃 Usage
+Run the specific engine you need, or the Master Brain:
 ```bash
-python src/tune.py
+python scan_hybrid.py
 ```
-*   **Resumable**: Saves progress to `optuna_study.db`. Safe to stop and restart.
-*   **Output**: Saves optimized config to `best_hyperparameters.json`.
 
-### 3. Training the Model
-Trains the LSTM model using the best hyperparameters found (or defaults).
-```bash
-python train.py
-```
-*   **Smart Loading**: Automatically loads `best_hyperparameters.json`.
-*   **Auto-Resume**: If interrupted, restarts from the last `checkpoints_mvp/last.ckpt`.
-*   **Logging**: Detailed logs saved to `training.log`.
-*   **Output**: `final_lstm_model.pth`.
+## 📊 Performance (Backtest 2018-2025)
+- **Neural Networks (LSTM)**: Failed (51% Accuracy).
+- **Daily Strategy**: Positive Expectancy (0.07%) but low hit rate.
+- **Hybrid Engine**: Successfully identifies Regime-Specific trades (Validated Jan 2026).
 
-### 4. Run the Web App
-**Terminal 1 (Backend):**
-```bash
-uvicorn app.main:app --reload
-```
-**Terminal 2 (Frontend):**
-```bash
-cd frontend
-npm start
-```
-Go to `http://localhost:3000` to see the dashboard.
+## 📂 Project Structure
+- `src/`: Data Loaders (Daily & Intraday 15m).
+- `scan_*.py`: The Execution Engines.
+- `archive/`: Legacy ML models (LSTM, XGBoost) - *Deprecated*.
 
-## 📊 Results (2024 Test Set)
-*To be populated after training.*
-*   **Accuracy**: Target >52%
-*   **Sharpe Ratio**: Target >1.0
-
-## 📁 Repository Structure
-*   `src/tune.py`: Optuna hyperparameter optimization.
-*   `src/data_loader.py`: Strict time-split logic.
-*   `src/lstm_model.py`: PyTorch Lightning LSTM.
-*   `train.py`: Robust training loop with Auto-Resume.
-*   `docs/`: Project Manual and Theory.
-*   `app/`: FastAPI Backend.
-*   `frontend/`: React Dashboard.
+---
+*Built with Python, Pandas, and yfinance.*

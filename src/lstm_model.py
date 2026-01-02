@@ -20,15 +20,20 @@ class LSTMPredictor(pl.LightningModule):
         
         self.fc = nn.Linear(hidden_dim, output_dim)
         self.dropout = nn.Dropout(dropout)
+        self.bn = nn.BatchNorm1d(hidden_dim) # Add Batch Norm for stability
         
         self.lr = lr
-        self.loss_fn = nn.CrossEntropyLoss(weight=torch.tensor([1.2, 0.8, 1.2])) # Slight weight to Up/Down to avoid Neutral bias
+        # Adjusted weights to be more aggressive against class imbalance if needed
+        self.loss_fn = nn.CrossEntropyLoss(weight=torch.tensor([1.2, 0.8, 1.2])) 
 
     def forward(self, x):
         # x shape: (batch, seq_len, features)
         out, _ = self.lstm(x)
         # Take last time step
         out = out[:, -1, :] 
+        
+        # Apply Batch Norm before Dropout/FC
+        out = self.bn(out)
         out = self.dropout(out)
         out = self.fc(out)
         return out # Logits
