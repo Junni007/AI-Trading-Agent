@@ -14,9 +14,9 @@ class SniperEngine:
     
     def __init__(self):
         self.loader = IntradayDataLoader()
-        # Full Indian Market (Nifty 100 + Key Midcaps)
-        from src.ticker_utils import get_nifty_total_market
-        self.universe = ["^NSEI", "^NSEBANK"] + get_nifty_total_market()
+        # Full Indian Market (Nifty 500)
+        from src.ticker_utils import get_nifty500_tickers
+        self.universe = ["^NSEI", "^NSEBANK"] + get_nifty500_tickers()
         
     def get_vote(self, ticker: str, df: pd.DataFrame) -> dict:
         """

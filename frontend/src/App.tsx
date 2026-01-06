@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { CustomCursor } from './components/CustomCursor';
+import { ParticleBackground } from './components/ParticleBackground';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { DetailsModal } from './components/DetailsModal';
@@ -99,8 +100,9 @@ function App() {
 
     return (
         <Router>
-            <div className="min-h-screen bg-marine text-mist font-sans selection:bg-teal/30 cursor-fancy flex flex-col">
+            <div className="min-h-screen bg-marine text-mist font-sans selection:bg-teal/30 cursor-fancy flex flex-col relative">
 
+                <ParticleBackground />
                 <CustomCursor />
                 <Header />
 

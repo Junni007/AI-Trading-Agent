@@ -1,6 +1,38 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, CheckCircle2, Activity } from 'lucide-react';
 import { AreaChart, Area, Tooltip, ResponsiveContainer } from 'recharts';
+import { useState, useEffect } from 'react';
+
+// Typewriter Component
+const TypewriterText = ({ text, delay }: { text: string; delay: number }) => {
+    const [currentText, setCurrentText] = useState('');
+    const [startTyping, setStartTyping] = useState(false);
+
+    useEffect(() => {
+        const timeout = setTimeout(() => {
+            setStartTyping(true);
+        }, delay);
+        return () => clearTimeout(timeout);
+    }, [delay]);
+
+    useEffect(() => {
+        if (!startTyping) return;
+
+        let index = 0;
+        const interval = setInterval(() => {
+            if (index < text.length) {
+                setCurrentText((prev) => prev + text.charAt(index));
+                index++;
+            } else {
+                clearInterval(interval);
+            }
+        }, 20); // Typing speed
+
+        return () => clearInterval(interval);
+    }, [startTyping, text]);
+
+    return <span>{currentText}{startTyping && currentText.length < text.length ? <span className="animate-pulse">|</span> : ''}</span>;
+};
 
 interface HistoryPoint {
     Time: string;
@@ -101,22 +133,22 @@ export const DetailsModal = ({ isOpen, onClose, ticker, action, rational, confid
                                     {rational.map((step, idx) => (
                                         <motion.div
                                             key={idx}
-                                            initial={{ opacity: 0, x: -10 }}
-                                            animate={{ opacity: 1, x: 0 }}
-                                            transition={{ delay: idx * 0.05 }}
+                                            // Make the container fade in slightly before typing
+                                            initial={{ opacity: 0 }}
+                                            animate={{ opacity: 1 }}
+                                            transition={{ delay: idx * 1.5 }} // Stagger blocks
                                             className="flex items-start gap-4"
                                         >
                                             <div className={`mt-1 min-w-[20px] ${step.includes("Solution") ? "text-teal" : "text-gray-600"}`}>
                                                 {step.includes("Solution") ? <CheckCircle2 size={20} /> : <div className="w-2 h-2 rounded-full bg-gray-600 mt-2 ml-1" />}
                                             </div>
-                                            <p className={`text-sm leading-relaxed ${step.includes("Solution") ? "text-white font-medium" : "text-gray-400"}`}>
-                                                {step}
+                                            <p className={`text-sm leading-relaxed font-mono ${step.includes("Solution") ? "text-teal font-bold" : "text-gray-300"}`}>
+                                                <TypewriterText text={step} delay={idx * 1500} />
                                             </p>
                                         </motion.div>
                                     ))}
                                 </div>
                             </div>
-
                         </motion.div>
                     </motion.div>
                 </>

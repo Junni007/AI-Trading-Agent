@@ -70,6 +70,30 @@ def get_nifty_total_market():
     logger.info(f"Loaded {len(fo_universe)} Indian Market tickers.")
     return fo_universe
 
+def get_nifty500_tickers():
+    """
+    Returns full Nifty 500 list from local CSV.
+    FALLBACK: Returns core 100 list if CSV missing.
+    """
+    csv_path = "src/nifty500.csv"
+    try:
+        if not pd.io.common.file_exists(csv_path):
+             # Try absolute path based on execution context if needed, or relative
+             # But let's assume running from root.
+             import os
+             csv_path = os.path.join(os.path.dirname(__file__), "nifty500.csv")
+             
+        df = pd.read_csv(csv_path)
+        tickers = df['Symbol'].tolist()
+        # Add .NS and dedup
+        tickers = [f"{t}.NS" for t in tickers]
+        tickers = list(set(tickers))
+        logger.info(f"Loaded {len(tickers)} Nifty 500 tickers from CSV.")
+        return tickers
+    except Exception as e:
+        logger.error(f"Failed to load Nifty 500 CSV: {e}. Falling back to Nifty Total Market.")
+        return get_nifty_total_market()
+
 def get_nifty50_tickers():
     """Returns top 50 Indian Stocks (NSE) for valid Yahoo Finance symbols."""
     return get_nifty_total_market() # Redirect to larger list
@@ -79,10 +103,14 @@ def get_extended_tickers(limit=500):
     Simulates a '5000' ticker request by combining lists and careful scaling.
     For Colab Free, 5000 is risky. We limit to 'limit' by default.
     """
-    sp500 = get_sp500_tickers()
-    nifty = get_nifty50_tickers()
+    # sp500 = get_sp500_tickers()
+    # nifty = get_nifty50_tickers()
     
-    combined = sp500 + nifty
-    # If user wants massive scale, we would need a bigger sources/file.
-    # For now, this ~550 is a safe "Large" start.
-    return combined[:limit] if limit else combined
+    # combined = sp500 + nifty
+    
+    # NEW LOGIC: Just get Nifty 500
+    combined = get_nifty500_tickers()
+    
+    if limit and len(combined) > limit:
+        return combined[:limit]
+    return combined

@@ -1,0 +1,24 @@
+# Scaling Simulation & UI Polish
+
+- [x] Expand Market Universe to Nifty 500 <!-- id: 0 -->
+    - [x] Create Implementation Plan
+    - [x] Download `src/nifty500.csv`
+    - [x] Update `src/ticker_utils.py` to fetch full Nifty 500 list
+    - [x] Optimize data fetching for larger universe
+- [x] Implement "Death/Demotion" & Lock Live Feed <!-- id: 1 -->
+    - [x] Implement "Death/Demotion" logic in `SimulationEngine`
+    - [x] Verify "Lock Live Feed" logic in Frontend/Backend integration
+- [x] Enhance UI/UX <!-- id: 2 -->
+    - [x] Create `ParticleBackground.tsx`
+    - [x] Add Typewriter effect to `DetailsModal.tsx`
+    - [x] Add Holographic borders to `ThinkingNode.tsx`
+    - [x] Review current frontend design
+    - [x] Apply "Premium" design updates (Simulated "Live" feel, animations)
+- [x] Refine Simulation Logic <!-- id: 3 -->
+    - [x] Update Scanning Engines (`scan_intraday.py`, `scan_volatility.py`) to use Nifty 500
+    - [ ] Tune RL agent thresholds and logic for new universe (Future Work)
+- [x] Marketing <!-- id: 4 -->
+    - [x] Create LinkedIn posts
+- [x] Documentation <!-- id: 5 -->
+    - [x] Create `docs/project_deep_dive.md`
+    - [x] Update Documentation with new UI features

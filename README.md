@@ -49,9 +49,12 @@ npm run start
 
 ## ✨ Features (v2.0 "Legendary")
 - **Hybrid Brain**: Expert Voting System (Momentum Sniper + Volatility Strategist).
-- **Scale**: Scans **Nifty 100** stocks in real-time.
+- **Massive Scale**: Scans **Nifty 500** stocks in real-time.
 - **Simulation Engine**: Built-in Paper Trading game. The AI trades its own signals. Watch it level up from "Novice" to "Grandmaster" based on P&L.
-- **Apple Aesthetic**: Premium "Glassmorphic" UI with Framer Motion animations.
+- **Premium AI Interface**:
+    - **Living Background**: Neural particle network.
+    - **Holographic Focus**: High-confidence trades glow with holographic borders.
+    - **Live Reasoning**: Typewriter effect for AI analysis logs.
 - **Live Charts**: Sparklines for every ticker in the Details view.
 
 ## 🧠 Architecture

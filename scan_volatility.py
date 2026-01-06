@@ -21,8 +21,8 @@ class VolatilityEngine:
     def __init__(self):
         self.loader = MVPDataLoader()
         # Full Indian Market
-        from src.ticker_utils import get_nifty_total_market
-        self.universe = ["^NSEI", "^NSEBANK"] + get_nifty_total_market()
+        from src.ticker_utils import get_nifty500_tickers
+        self.universe = ["^NSEI", "^NSEBANK"] + get_nifty500_tickers()
         
     def calculate_hv_rank(self, df: pd.DataFrame, window: int = 20) -> dict:
         """

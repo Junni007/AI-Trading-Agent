@@ -37,8 +37,20 @@ export const ThinkingNode: React.FC<ThinkingNodeProps> = ({ ticker, regime, acti
         <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className={`group relative flex flex-col justify-between bg-gunmetal/40 backdrop-blur-xl rounded-3xl border border-white/5 p-6 transition-all duration-300 hover:-translate-y-1 hover:bg-gunmetal/60 ${glowStyle}`}
+            className={`group relative flex flex-col justify-between bg-gunmetal/40 backdrop-blur-xl rounded-3xl border border-white/5 p-6 transition-all duration-300 hover:-translate-y-1 hover:bg-gunmetal/60 ${glowStyle} overflow-hidden`}
         >
+            {/* Holographic Border for High Confidence */}
+            {confidence >= 0.8 && (
+                <>
+                    <motion.div
+                        className="absolute inset-0 rounded-3xl border-2 border-transparent"
+                        style={{ background: `linear-gradient(45deg, ${isBullish ? '#00ADB5' : '#818CF8'}, transparent 40%) border-box` }}
+                        animate={{ rotate: [0, 360] }}
+                        transition={{ repeat: Infinity, duration: 4, ease: "linear" }}
+                    />
+                    <div className="absolute inset-0 rounded-3xl border border-white/10 shadow-[inner_0_0_20px_rgba(255,255,255,0.05)] pointer-events-none" />
+                </>
+            )}
             {/* Header: Ticker & Score */}
             <div className="flex justify-between items-start mb-6">
                 <div>
