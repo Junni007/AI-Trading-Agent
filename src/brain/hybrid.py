@@ -1,7 +1,7 @@
 import logging
 import pandas as pd
-from scan_intraday import SniperEngine
-from scan_volatility import VolatilityEngine
+from src.brain.intraday import SniperEngine
+from src.brain.volatility import VolatilityEngine
 
 # Configure Logger
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')

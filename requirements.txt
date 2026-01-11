@@ -14,3 +14,6 @@ optuna
 optuna-integration
 lxml
 
+pydantic-settings
+pytest
+httpx

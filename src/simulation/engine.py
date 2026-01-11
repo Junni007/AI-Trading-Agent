@@ -3,11 +3,13 @@ import json
 import os
 from datetime import datetime
 
+from src.config import settings
+
 # Configure Logger
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('SimEngine')
 
-DB_PATH = "simulation_state.json"
+DB_PATH = settings.STATE_FILE
 
 class SimulationEngine:
     """
@@ -51,11 +53,9 @@ class SimulationEngine:
         self.state["status"] = "ALIVE"
         self.save_state()
 
-    def process_tick(self, market_data: list):
+    def process_tick(self, market_data: list, regime: str = "NEUTRAL"):
         """
         Processes a 'tick' of market data decisions.
-        1. Check Existing Positions (TP/SL).
-        2. Open New Positions if Signal is Strong.
         """
         logs = []
         
@@ -74,16 +74,27 @@ class SimulationEngine:
             qty = position['qty']
             pnl_pct = (current_price - entry) / entry * 100
             
-            # Simple Exit Logic (Reinforcement Signal)
+            # Action Logic with Regime Modifiers
             action = None
             reward = 0
             
-            # Take Profit (+1%)
-            if pnl_pct >= 1.0:
+            # Regime Modifiers
+            tp_target = 1.0
+            sl_target = -0.5
+            
+            if regime == "HIGH_VOLATILITY":
+                tp_target = 2.0 # Greedier
+                sl_target = -1.5 # Looser stop
+            elif regime == "LOW_VOLATILITY":
+                tp_target = 0.8 # Quick scalp
+                sl_target = -0.3 # Tight stop
+            
+            # Take Profit
+            if pnl_pct >= tp_target:
                 action = "SELL_TP"
                 reward = 1
-            # Stop Loss (-0.5%)
-            elif pnl_pct <= -0.5:
+            # Stop Loss
+            elif pnl_pct <= sl_target:
                 action = "SELL_SL"
                 reward = -4
             
@@ -103,6 +114,16 @@ class SimulationEngine:
                 logs.append(log_entry)
         
         # 2. KeyLogic: Open New Positions
+        current_value = self.state['cash'] + sum([
+            pos['qty'] * market_map.get(t, {'Price': pos['avg_price']}).get('Price', pos['avg_price']) 
+            for t, pos in self.state['positions'].items()
+        ])
+        
+        # Update Equity Curve for Stats
+        if 'equity_curve' not in self.state: self.state['equity_curve'] = []
+        self.state['equity_curve'].append(current_value)
+        if len(self.state['equity_curve']) > 252: self.state['equity_curve'].pop(0) # Keep 1 year daily approx
+        
         # Only if we have cash and strict criteria
         for item in market_data:
             ticker = item['Ticker']
@@ -113,28 +134,29 @@ class SimulationEngine:
             
             # --- RL AGENT LOGIC (Dynamic Risk) ---
             # 1. Determine Threshold based on Level
-            # "Risk Taker" initially -> Becomes disciplined later.
             threshold = 0.85 # Default
             level = self.state['level']
             
-            if "Novice" in level: threshold = 0.10 # Buy Everything (Learning Phase)
+            if "Novice" in level: threshold = 0.10 
             elif "Apprentice" in level: threshold = 0.40
             elif "Pro" in level: threshold = 0.70
             elif "Wolf" in level: threshold = 0.90
             
-            # 2. Educated Guessing (Boost Conf if Volume High)
-            # Simulating "Reasoning"
+            # Regime Penalty: If Pro, require higher conf in High Vol
+            if regime == "HIGH_VOLATILITY" and "Pro" in level:
+                threshold += 0.05
+            
+            # 2. Educated Guessing
             adjusted_conf = item['Confidence']
             if "Volume" in item.get('Reason', ''): 
                 adjusted_conf += 0.10
             
-            # 3. Execution (Buy Signal or Action)
+            # 3. Execution
             is_buy_signal = ("BUY" in item.get('Signal', '') or 
                              "LONG" in item.get('Action', '') or
                              "SNIPER" in item.get('Signal', ''))
                              
             if (adjusted_conf >= threshold) and is_buy_signal:
-                # Allocate 20% of Portfolio (Aggressive)
                 allocation = self.state['balance'] * 0.20
                 if self.state['cash'] > allocation:
                     qty = int(allocation / price)
@@ -149,14 +171,44 @@ class SimulationEngine:
                         self.state['history'].insert(0, log_entry)
                         logs.append(log_entry)
 
-        self.state['balance'] = self.state['cash'] + sum([
-            pos['qty'] * market_map.get(t, {'Price': pos['avg_price']}).get('Price', pos['avg_price']) 
-            for t, pos in self.state['positions'].items()
-        ])
+        # Final Balance Update
+        self.state['balance'] = current_value
+        
+        # Stats Calculation
+        self.calculate_stats()
         
         self.save_state()
-        self.check_survival() # Check if we survived this tick
+        self.check_survival() 
+        if not logs:
+            logs.append(f"Scan Complete. Regime: {regime}. No Actions.")
+            
         return logs
+
+    def calculate_stats(self):
+        """Calculates Max Drawdown and Sharpe Ratio"""
+        import numpy as np
+        curve = self.state.get('equity_curve', [])
+        if len(curve) < 2: return
+        
+        # Max Drawdown
+        peak = curve[0]
+        max_dd = 0
+        for val in curve:
+            if val > peak: peak = val
+            dd = (peak - val) / peak
+            if dd > max_dd: max_dd = dd
+        self.state['max_drawdown'] = max_dd * 100
+        
+        # Sharpe (Simplified)
+        returns = np.diff(curve) / curve[:-1]
+        if len(returns) > 0:
+            vol = np.std(returns)
+            if vol > 0:
+                sharpe = np.mean(returns) / vol * np.sqrt(252) # Annualized
+                self.state['sharpe_ratio'] = sharpe
+            else:
+                self.state['sharpe_ratio'] = 0.0
+
 
     def check_survival(self):
         """

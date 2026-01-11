@@ -43,6 +43,7 @@ python scan_hybrid.py
 One command to run the Backend (Brain) + Frontend (Dashboard):
 ```bash
 cd frontend
+npm install
 npm run start
 ```
 *Access the Dashboard at:* `http://localhost:5173`

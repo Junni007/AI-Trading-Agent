@@ -3,6 +3,7 @@ import { ThinkingNode } from '../components/ThinkingNode';
 import { Loader } from '../components/Loader';
 import { Hero } from '../components/Hero';
 import { SimulationPanel } from '../components/SimulationPanel';
+import { Terminal } from '../components/Terminal';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search } from 'lucide-react';
 
@@ -18,9 +19,10 @@ interface DashboardProps {
     isAuto: boolean;
     isLocked: boolean;
     onDetails: (ticker: string, action: string, steps: string[], confidence: number, history: any[]) => void;
+    logs: string[];
 }
 
-export const Dashboard = ({ data, loading, marketMood, lastUpdated, simState, onResetSim, onScan, isAuto, isLocked, onDetails }: DashboardProps) => {
+export const Dashboard = ({ data, loading, marketMood, lastUpdated, simState, onResetSim, onScan, isAuto, isLocked, onDetails, logs }: DashboardProps) => {
     const [filter, setFilter] = useState<'all' | 'opportunities' | 'watch'>('all');
     const [searchQuery, setSearchQuery] = useState('');
 
@@ -57,6 +59,9 @@ export const Dashboard = ({ data, loading, marketMood, lastUpdated, simState, on
 
             {/* Simulation Module (Iteration 7) */}
             <SimulationPanel simState={simState} onReset={onResetSim} />
+
+            {/* Live Terminal (Iteration 8) */}
+            <Terminal logs={logs} />
 
             {/* Controls Section: Filter Tabs + Search */}
             {!loading && data.length > 0 && (

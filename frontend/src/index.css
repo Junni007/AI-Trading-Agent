@@ -4,7 +4,7 @@
 
 @layer base {
     body {
-        @apply bg-marine text-mist font-sans antialiased;
+        @apply bg-marine text-mist font-sans antialiased overflow-y-auto;
     }
 }
 

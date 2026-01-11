@@ -27,6 +27,7 @@ function App() {
     const [lastUpdated, setLastUpdated] = useState<string>('');
     const [simState, setSimState] = useState<any>(null);
     const [isAuto, setIsAuto] = useState(true); // Default to Auto-Scan
+    const [logs, setLogs] = useState<string[]>([]); // New Log State
 
     // Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -59,12 +60,26 @@ function App() {
     const runScan = async (silent = false) => {
         if (!silent) setLoading(true);
         try {
-            // In production, point to your FastAPI URL
-            const res = await axios.get('http://localhost:8000/api/scan');
+            // 1. Trigger Scan (Fire & Forget)
+            await axios.get('http://localhost:8000/api/scan');
+
+            // 2. Fetch Latest Results immediately (to update UI if available)
+            const res = await axios.get('http://localhost:8000/api/results');
+
             if (res.data.status === 'success') {
-                setData(res.data.data);
-                if (res.data.simulation) setSimState(res.data.simulation); // Update Sim State
-                deriveMarketMood(res.data.data);
+                // Only update if we have data (or if it's the first load)
+                if (res.data.data && res.data.data.length > 0) {
+                    setData(res.data.data);
+                    deriveMarketMood(res.data.data);
+                }
+                if (res.data.simulation) setSimState(res.data.simulation);
+                if (res.data.logs) setLogs(prev => [...res.data.logs.slice(0, 5), ...prev].slice(0, 50)); // Append recent logs, keep 50
+
+                // Show "Thinking..." status if backend says so
+                if (res.data.is_thinking) {
+                    // Maybe show a spinner? For now, 'loading' state covers it manually
+                }
+
                 setLastUpdated(new Date().toLocaleTimeString());
             }
         } catch (err) {
@@ -130,6 +145,7 @@ function App() {
                                 onDetails={openDetails}
                                 simState={simState}
                                 onResetSim={resetSim}
+                                logs={logs}
                             />
                         } />
                         <Route path="/signals" element={<Signals data={data} />} />
