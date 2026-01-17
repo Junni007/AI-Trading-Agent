@@ -27,8 +27,8 @@ wandb/
 # Data
 data/
 *.csv
+!src/nifty500.csv
 *.xlsx
-clean_tickers.py
 docs/task_status.md
 download_csv.py
 
