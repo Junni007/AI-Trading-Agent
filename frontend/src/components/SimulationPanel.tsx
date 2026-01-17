@@ -1,8 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Trophy, TrendingUp, AlertTriangle, RefreshCcw } from 'lucide-react';
-
-import { AreaChart, Area, Tooltip, ResponsiveContainer } from 'recharts';
+import { Trophy, TrendingUp, TrendingDown, RotateCcw } from 'lucide-react';
+import { AreaChart, Area, ResponsiveContainer } from 'recharts';
 
 interface SimState {
     balance: number;
@@ -26,95 +25,117 @@ export const SimulationPanel: React.FC<SimulationPanelProps> = ({ simState, onRe
 
     const pnl = simState.balance - 10000;
     const isProfit = pnl >= 0;
+    const pnlPercent = ((pnl / 10000) * 100).toFixed(2);
 
-    // Format Data for Chart
+    // Prepare chart data
     const chartData = simState.equity_curve?.map((val, i) => ({ i, val })) || [];
+
+    // Level calculation
+    const level = simState.score > 0 ? Math.floor(simState.score / 20) + 1 : 1;
+    const xpProgress = Math.min(100, (simState.score % 50) * 2);
 
     return (
         <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="w-full max-w-[1400px] px-4 mb-8"
+            transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+            className="w-full max-w-[1400px] px-4 mb-6"
         >
-            <div className="bg-gradient-to-r from-gunmetal to-marine border border-white/5 rounded-3xl p-6 md:p-8 relative overflow-hidden shadow-2xl">
-                {/* Background Glow */}
-                <div className="absolute top-0 right-0 w-64 h-64 bg-teal/10 rounded-full blur-[100px] -mr-20 -mt-20" />
+            <div className="panel-elevated p-6 md:p-8 relative overflow-hidden">
+                {/* Ambient glow */}
+                <div className="absolute top-0 right-0 w-80 h-80 bg-amber/5 rounded-full blur-[100px] -mr-40 -mt-40 pointer-events-none" />
 
-                <div className="flex flex-col md:flex-row justify-between items-start gap-8 relative z-10">
+                <div className="flex flex-col lg:flex-row justify-between items-start gap-8 relative z-10">
 
-                    {/* Left Side: Stats */}
-                    <div className="flex flex-col justify-between h-full gap-6">
-                        {/* Level & Score Section */}
-                        <div className="flex items-center gap-6">
-                            <div className="h-20 w-20 rounded-2xl bg-black/40 border border-teal/20 flex items-center justify-center relative">
-                                <Trophy className="text-teal drop-shadow-[0_0_10px_rgba(0,173,181,0.5)]" size={32} />
-                                <div className="absolute -bottom-2 px-3 py-1 bg-teal text-marine text-[10px] font-bold rounded-full uppercase tracking-wider">
-                                    Lvl {simState.score > 0 ? Math.floor(simState.score / 20) + 1 : 1}
+                    {/* Left: Level & Status */}
+                    <div className="flex flex-col gap-5">
+                        <div className="flex items-center gap-5">
+                            {/* Level Badge */}
+                            <div className="relative">
+                                <div className="h-16 w-16 rounded-2xl bg-void border border-graphite flex items-center justify-center">
+                                    <Trophy className="text-amber" size={24} />
+                                </div>
+                                <div className="absolute -bottom-2 -right-2 px-2 py-0.5 bg-amber text-void text-[10px] font-bold rounded-full font-mono">
+                                    LV.{level}
                                 </div>
                             </div>
+
                             <div>
-                                <h3 className="text-2xl font-bold text-white tracking-tight">{simState.level}</h3>
+                                <h3 className="font-display text-xl font-bold text-chalk tracking-tight">
+                                    {simState.level}
+                                </h3>
                                 <div className="flex items-center gap-2 mt-1">
-                                    <span className="text-sm text-gray-400 font-mono">XP Score:</span>
-                                    <span className={`text-lg font-bold ${simState.score >= 0 ? 'text-teal' : 'text-red-400'}`}>
+                                    <span className="text-xs font-mono text-smoke">XP</span>
+                                    <span className={`font-mono font-bold ${simState.score >= 0 ? 'text-amber' : 'text-crimson'}`}>
                                         {simState.score} pts
                                     </span>
                                 </div>
-                                <div className="w-48 h-1.5 bg-gray-700/50 rounded-full mt-3 overflow-hidden">
+
+                                {/* XP Progress Bar */}
+                                <div className="w-40 h-1 bg-graphite rounded-full mt-2.5 overflow-hidden">
                                     <motion.div
-                                        className="h-full bg-teal shadow-[0_0_10px_#00ADB5]"
+                                        className="h-full bg-gradient-to-r from-amber to-ember"
                                         initial={{ width: 0 }}
-                                        animate={{ width: `${Math.min(100, (simState.score % 50) * 2)}%` }}
+                                        animate={{ width: `${xpProgress}%` }}
+                                        transition={{ duration: 0.8, ease: "easeOut" }}
                                     />
                                 </div>
                             </div>
                         </div>
 
-                        {/* Actions */}
-                        <div className="flex items-center gap-6 text-sm text-gray-400 mt-2">
-                            <button
-                                onClick={onReset}
-                                className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs text-gray-400 hover:text-white transition-colors border border-white/5"
-                            >
-                                <RefreshCcw size={12} />
-                                Reset Simulation
-                            </button>
-                        </div>
+                        {/* Reset Button */}
+                        <button
+                            onClick={onReset}
+                            className="btn-ghost flex items-center gap-2 w-fit text-xs"
+                        >
+                            <RotateCcw size={12} />
+                            Reset Simulation
+                        </button>
                     </div>
 
-                    {/* Right Side: P&L + Graph */}
-                    <div className="flex flex-col items-end w-full md:w-1/2">
-                        <div className="text-4xl md:text-5xl font-mono font-bold text-white tracking-tighter shadow-black drop-shadow-lg">
+                    {/* Right: Balance & Chart */}
+                    <div className="flex flex-col items-end w-full lg:w-1/2">
+                        {/* Balance */}
+                        <div className="font-mono text-4xl md:text-5xl font-bold text-chalk tracking-tighter">
                             ₹{simState.balance.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                         </div>
-                        <div className={`flex items-center gap-2 mt-2 px-3 py-1 rounded-lg bg-black/20 ${isProfit ? 'text-teal' : 'text-red-400'}`}>
-                            {isProfit ? <TrendingUp size={16} /> : <AlertTriangle size={16} />}
-                            <span className="font-mono font-bold">
-                                {isProfit ? '+' : ''}₹{pnl.toFixed(0)} ({((pnl / 10000) * 100).toFixed(2)}%)
+
+                        {/* PnL Badge */}
+                        <div className={`flex items-center gap-2 mt-2 px-3 py-1.5 rounded-lg ${isProfit ? 'bg-sage/10 text-sage' : 'bg-crimson/10 text-crimson'
+                            }`}>
+                            {isProfit ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                            <span className="font-mono font-semibold text-sm">
+                                {isProfit ? '+' : ''}₹{pnl.toFixed(0)} ({pnlPercent}%)
                             </span>
                         </div>
-                        {/* Advanced Stats */}
-                        <div className="flex gap-4 mt-2 text-[10px] font-mono text-gray-500 uppercase tracking-widest">
+
+                        {/* Advanced Metrics */}
+                        <div className="flex gap-5 mt-3 text-[10px] font-mono text-smoke uppercase tracking-widest">
                             <div title="Sharpe Ratio">
-                                SR: <span className="text-white">{simState.sharpe_ratio ? simState.sharpe_ratio.toFixed(2) : '0.00'}</span>
+                                SR: <span className="text-chalk">{simState.sharpe_ratio?.toFixed(2) || '0.00'}</span>
                             </div>
                             <div title="Max Drawdown">
-                                DD: <span className="text-red-400">{simState.max_drawdown ? simState.max_drawdown.toFixed(1) : '0.0'}%</span>
+                                DD: <span className="text-crimson">{simState.max_drawdown?.toFixed(1) || '0.0'}%</span>
                             </div>
                         </div>
 
-                        {/* Mini Graph */}
-                        <div className="w-full h-32 mt-4 ml-8">
+                        {/* Mini Chart */}
+                        <div className="w-full h-28 mt-4">
                             <ResponsiveContainer width="100%" height="100%">
                                 <AreaChart data={chartData}>
                                     <defs>
-                                        <linearGradient id="colorVal" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#00ADB5" stopOpacity={0.3} />
-                                            <stop offset="95%" stopColor="#00ADB5" stopOpacity={0} />
+                                        <linearGradient id="equityGradient" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.25} />
+                                            <stop offset="95%" stopColor="#F59E0B" stopOpacity={0} />
                                         </linearGradient>
                                     </defs>
-                                    <Tooltip content={<></>} />
-                                    <Area type="monotone" dataKey="val" stroke="#00ADB5" strokeWidth={2} fillOpacity={1} fill="url(#colorVal)" />
+                                    <Area
+                                        type="monotone"
+                                        dataKey="val"
+                                        stroke="#F59E0B"
+                                        strokeWidth={2}
+                                        fill="url(#equityGradient)"
+                                    />
                                 </AreaChart>
                             </ResponsiveContainer>
                         </div>

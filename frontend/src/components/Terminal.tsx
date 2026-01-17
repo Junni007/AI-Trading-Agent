@@ -1,5 +1,4 @@
 import React, { useEffect, useRef } from 'react';
-import { Terminal as TerminalIcon } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface TerminalProps {
@@ -16,36 +15,60 @@ export const Terminal: React.FC<TerminalProps> = ({ logs }) => {
     }, [logs]);
 
     return (
-        <div className="w-full max-w-[1400px] px-4 mb-4">
-            <div className="bg-gunmetal/80 border border-white/10 rounded-xl overflow-hidden shadow-2xl backdrop-blur-md">
-                {/* Header */}
-                <div className="flex items-center gap-2 px-4 py-2 bg-black/40 border-b border-white/5">
-                    <TerminalIcon size={14} className="text-teal" />
-                    <span className="text-xs font-mono font-bold text-gray-400 uppercase tracking-widest">System Logs</span>
+        <div className="w-full max-w-[1400px] px-4 mb-6">
+            <div className="panel overflow-hidden">
+                {/* Terminal Header */}
+                <div className="flex items-center justify-between px-4 py-2.5 bg-obsidian border-b border-graphite/50">
+                    <div className="flex items-center gap-2">
+                        <div className="flex gap-1.5">
+                            <div className="w-2.5 h-2.5 rounded-full bg-crimson/60" />
+                            <div className="w-2.5 h-2.5 rounded-full bg-amber/60" />
+                            <div className="w-2.5 h-2.5 rounded-full bg-sage/60" />
+                        </div>
+                        <span className="text-[10px] font-mono font-semibold text-smoke uppercase tracking-widest ml-2">
+                            sys::log
+                        </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-sage animate-pulse" />
+                        <span className="text-[10px] font-mono text-smoke">STREAMING</span>
+                    </div>
                 </div>
 
                 {/* Log Stream */}
                 <div
                     ref={scrollContainerRef}
-                    className="h-32 overflow-y-auto p-4 font-mono text-xs space-y-1 custom-scrollbar"
+                    className="h-36 overflow-y-auto px-4 py-3 font-mono text-xs bg-void/50"
                 >
                     {logs.length === 0 ? (
-                        <div className="text-gray-600 italic">System ready. Waiting for scan...</div>
+                        <div className="text-smoke/50 italic flex items-center gap-2">
+                            <span className="text-amber">$</span> awaiting signal...
+                        </div>
                     ) : (
-                        logs.map((log, i) => (
-                            <motion.div
-                                key={i}
-                                initial={{ opacity: 0, x: -10 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                className="text-mist/80 border-l-2 border-transparent hover:border-teal/30 pl-2 transition-colors"
-                            >
-                                <span className="text-teal/50 mr-2">[{new Date().toLocaleTimeString()}]</span>
-                                {log}
-                            </motion.div>
-                        ))
+                        <div className="space-y-1">
+                            {logs.map((log, i) => (
+                                <motion.div
+                                    key={`${log}-${i}`}
+                                    initial={{ opacity: 0, x: -5 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    transition={{ duration: 0.2 }}
+                                    className="flex items-start gap-3 py-0.5 hover:bg-white/[0.02] -mx-2 px-2 rounded transition-colors"
+                                >
+                                    <span className="text-amber/50 shrink-0">{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                                    <span className="text-ash/90">{log}</span>
+                                </motion.div>
+                            ))}
+                        </div>
                     )}
-                    <div />
                 </div>
+
+                {/* Scanline Effect (CSS-based, respects reduced-motion) */}
+                <div
+                    className="absolute inset-0 pointer-events-none opacity-[0.015]"
+                    style={{
+                        background: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.03) 2px, rgba(255,255,255,0.03) 4px)'
+                    }}
+                />
             </div>
         </div>
     );

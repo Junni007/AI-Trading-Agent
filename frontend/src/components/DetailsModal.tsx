@@ -26,12 +26,19 @@ const TypewriterText = ({ text, delay }: { text: string; delay: number }) => {
             } else {
                 clearInterval(interval);
             }
-        }, 20); // Typing speed
+        }, 15);
 
         return () => clearInterval(interval);
     }, [startTyping, text]);
 
-    return <span>{currentText}{startTyping && currentText.length < text.length ? <span className="animate-pulse">|</span> : ''}</span>;
+    return (
+        <span>
+            {currentText}
+            {startTyping && currentText.length < text.length && (
+                <span className="text-amber animate-pulse">▊</span>
+            )}
+        </span>
+    );
 };
 
 interface HistoryPoint {
@@ -51,107 +58,133 @@ interface ModalProps {
 }
 
 export const DetailsModal = ({ isOpen, onClose, ticker, action, rational, confidence, history }: ModalProps) => {
+
+    const isActionable = action !== 'WAIT' && action !== 'WATCH_FOR_BREAKOUT';
+
     return (
         <AnimatePresence>
             {isOpen && (
-                <>
-                    {/* Apple-style Backdrop (Ultra Blur) */}
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+                >
+                    {/* Backdrop */}
+                    <div
+                        className="absolute inset-0 bg-void/80 backdrop-blur-2xl"
                         onClick={onClose}
-                        className="fixed inset-0 bg-black/40 backdrop-blur-xl z-[100] flex items-center justify-center p-4 cursor-default"
+                    />
+
+                    {/* Modal */}
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                        transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="relative w-full max-w-2xl max-h-[85vh] panel overflow-hidden flex flex-col"
                     >
-                        {/* Modal Content (Glass Card) */}
-                        <motion.div
-                            initial={{ scale: 0.95, opacity: 0, y: 10 }}
-                            animate={{ scale: 1, opacity: 1, y: 0 }}
-                            exit={{ scale: 0.95, opacity: 0, y: 10 }}
-                            onClick={(e) => e.stopPropagation()}
-                            className="w-full max-w-2xl bg-gunmetal/80 backdrop-blur-2xl border border-white/10 rounded-3xl shadow-2xl overflow-hidden relative flex flex-col max-h-[90vh]"
-                        >
-                            {/* Header */}
-                            <div className="p-8 border-b border-white/5 flex justify-between items-start">
-                                <div>
-                                    <h2 className="text-4xl font-bold text-white tracking-tight mb-2">{ticker}</h2>
-                                    <div className="flex items-center gap-3">
-                                        <span className={`px-3 py-1 rounded-full text-xs font-semibold tracking-wide border ${action === 'WAIT'
-                                            ? 'bg-gray-500/10 border-gray-500/20 text-gray-400'
-                                            : 'bg-teal/10 border-teal/20 text-teal shadow-[0_0_10px_rgba(0,173,181,0.2)]'
-                                            }`}>
-                                            {action.replace(/_/g, ' ')}
-                                        </span>
-                                        <span className="text-sm text-gray-400 font-medium">Confidence: {(confidence * 100).toFixed(0)}%</span>
-                                    </div>
+                        {/* Header */}
+                        <div className="p-6 md:p-8 border-b border-graphite/50 flex justify-between items-start">
+                            <div>
+                                <h2 className="font-display text-3xl md:text-4xl font-bold text-chalk tracking-tight">
+                                    {ticker.replace('.NS', '')}
+                                </h2>
+                                <div className="flex items-center gap-3 mt-2">
+                                    <span className={`signal-badge ${isActionable
+                                            ? 'bg-ember/10 text-ember border-ember/20'
+                                            : 'bg-amber/10 text-amber border-amber/20'
+                                        }`}>
+                                        {action.replace(/_/g, ' ')}
+                                    </span>
+                                    <span className="text-sm text-smoke font-mono">
+                                        {(confidence * 100).toFixed(0)}% conf.
+                                    </span>
                                 </div>
-                                <button
-                                    onClick={onClose}
-                                    className="p-2 bg-white/5 hover:bg-white/10 rounded-full text-gray-400 hover:text-white transition-all"
-                                >
-                                    <X size={20} />
-                                </button>
                             </div>
+                            <button
+                                onClick={onClose}
+                                className="p-2.5 rounded-xl bg-obsidian hover:bg-slate text-smoke hover:text-chalk transition-colors border border-graphite/50"
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
 
-                            {/* Chart Section (New Features) */}
-                            <div className="w-full h-64 bg-marine/30 relative">
-                                {history && history.length > 0 ? (
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <AreaChart data={history}>
-                                            <defs>
-                                                <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
-                                                    <stop offset="5%" stopColor="#00ADB5" stopOpacity={0.3} />
-                                                    <stop offset="95%" stopColor="#00ADB5" stopOpacity={0} />
-                                                </linearGradient>
-                                            </defs>
-                                            <Tooltip
-                                                contentStyle={{ backgroundColor: '#222831', borderColor: '#333', borderRadius: '8px', color: '#fff' }}
-                                                itemStyle={{ color: '#00ADB5' }}
-                                                labelStyle={{ display: 'none' }}
-                                            />
-                                            <Area
-                                                type="monotone"
-                                                dataKey="Close"
-                                                stroke="#00ADB5"
-                                                fillOpacity={1}
-                                                fill="url(#colorPrice)"
-                                                strokeWidth={2}
-                                            />
-                                        </AreaChart>
-                                    </ResponsiveContainer>
-                                ) : (
-                                    <div className="flex items-center justify-center h-full text-gray-500 text-sm">
-                                        <Activity size={16} className="mr-2" /> No Chart Data Available
-                                    </div>
-                                )}
-                            </div>
+                        {/* Chart Section */}
+                        <div className="w-full h-56 bg-void/50 border-b border-graphite/50 relative">
+                            {history && history.length > 0 ? (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <AreaChart data={history} margin={{ top: 20, right: 20, bottom: 0, left: 20 }}>
+                                        <defs>
+                                            <linearGradient id="modalChartGradient" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.3} />
+                                                <stop offset="95%" stopColor="#F59E0B" stopOpacity={0} />
+                                            </linearGradient>
+                                        </defs>
+                                        <Tooltip
+                                            contentStyle={{
+                                                backgroundColor: '#141418',
+                                                borderColor: '#2A2A32',
+                                                borderRadius: '12px',
+                                                color: '#F5F5F5',
+                                                fontFamily: 'JetBrains Mono, monospace',
+                                                fontSize: '12px'
+                                            }}
+                                            itemStyle={{ color: '#F59E0B' }}
+                                            labelStyle={{ display: 'none' }}
+                                        />
+                                        <Area
+                                            type="monotone"
+                                            dataKey="Close"
+                                            stroke="#F59E0B"
+                                            strokeWidth={2}
+                                            fill="url(#modalChartGradient)"
+                                        />
+                                    </AreaChart>
+                                </ResponsiveContainer>
+                            ) : (
+                                <div className="flex items-center justify-center h-full text-smoke text-sm gap-2">
+                                    <Activity size={16} className="text-amber/50" />
+                                    No price history available
+                                </div>
+                            )}
+                        </div>
 
-                            {/* Logic Section */}
-                            <div className="p-8 space-y-6 overflow-y-auto">
-                                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-[0.2em]">Thinking Process</h3>
-                                <div className="space-y-4">
-                                    {rational.map((step, idx) => (
+                        {/* Reasoning Section */}
+                        <div className="p-6 md:p-8 space-y-5 overflow-y-auto flex-grow">
+                            <h3 className="text-[10px] font-bold text-smoke uppercase tracking-[0.25em] font-mono">
+                                Analysis Chain
+                            </h3>
+                            <div className="space-y-4">
+                                {rational.map((step, idx) => {
+                                    const isSolution = step.includes("Solution");
+                                    return (
                                         <motion.div
                                             key={idx}
-                                            // Make the container fade in slightly before typing
                                             initial={{ opacity: 0 }}
                                             animate={{ opacity: 1 }}
-                                            transition={{ delay: idx * 1.5 }} // Stagger blocks
+                                            transition={{ delay: idx * 1.2 }}
                                             className="flex items-start gap-4"
                                         >
-                                            <div className={`mt-1 min-w-[20px] ${step.includes("Solution") ? "text-teal" : "text-gray-600"}`}>
-                                                {step.includes("Solution") ? <CheckCircle2 size={20} /> : <div className="w-2 h-2 rounded-full bg-gray-600 mt-2 ml-1" />}
+                                            <div className={`mt-1 ${isSolution ? 'text-sage' : 'text-graphite'}`}>
+                                                {isSolution ? (
+                                                    <CheckCircle2 size={16} />
+                                                ) : (
+                                                    <div className="w-1.5 h-1.5 rounded-full bg-amber/40 mt-1.5 ml-0.5" />
+                                                )}
                                             </div>
-                                            <p className={`text-sm leading-relaxed font-mono ${step.includes("Solution") ? "text-teal font-bold" : "text-gray-300"}`}>
-                                                <TypewriterText text={step} delay={idx * 1500} />
+                                            <p className={`text-sm leading-relaxed font-mono ${isSolution ? 'text-sage font-semibold' : 'text-ash'
+                                                }`}>
+                                                <TypewriterText text={step} delay={idx * 1200} />
                                             </p>
                                         </motion.div>
-                                    ))}
-                                </div>
+                                    );
+                                })}
                             </div>
-                        </motion.div>
+                        </div>
                     </motion.div>
-                </>
+                </motion.div>
             )}
         </AnimatePresence>
     );

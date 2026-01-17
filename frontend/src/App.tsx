@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { CustomCursor } from './components/CustomCursor';
-import { ParticleBackground } from './components/ParticleBackground';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { DetailsModal } from './components/DetailsModal';
@@ -18,6 +17,12 @@ interface Decision {
     Confidence: number;
     Rational: string[];
     History?: any[];
+    QuantRisk?: {
+        WinRate: number;
+        EV: number;
+        VaR95: number;
+        MaxDrawdown?: number;
+    };
 }
 
 function App() {
@@ -26,8 +31,8 @@ function App() {
     const [marketMood, setMarketMood] = useState('NEUTRAL');
     const [lastUpdated, setLastUpdated] = useState<string>('');
     const [simState, setSimState] = useState<any>(null);
-    const [isAuto, setIsAuto] = useState(true); // Default to Auto-Scan
-    const [logs, setLogs] = useState<string[]>([]); // New Log State
+    const [isAuto, setIsAuto] = useState(true);
+    const [logs, setLogs] = useState<string[]>([]);
 
     // Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -46,13 +51,13 @@ function App() {
             .catch(err => console.error(err));
     }, []);
 
-    // Real-Time Loop (The "Pulse")
+    // Real-Time Loop
     useEffect(() => {
         let interval: any;
         if (isAuto) {
             interval = setInterval(() => {
-                if (!loading) runScan(true); // Silent scan
-            }, 2000); // 2 Second Loop
+                if (!loading) runScan(true);
+            }, 2000);
         }
         return () => clearInterval(interval);
     }, [isAuto, loading]);
@@ -60,26 +65,16 @@ function App() {
     const runScan = async (silent = false) => {
         if (!silent) setLoading(true);
         try {
-            // 1. Trigger Scan (Fire & Forget)
             await axios.get('http://localhost:8000/api/scan');
-
-            // 2. Fetch Latest Results immediately (to update UI if available)
             const res = await axios.get('http://localhost:8000/api/results');
 
             if (res.data.status === 'success') {
-                // Only update if we have data (or if it's the first load)
                 if (res.data.data && res.data.data.length > 0) {
                     setData(res.data.data);
                     deriveMarketMood(res.data.data);
                 }
                 if (res.data.simulation) setSimState(res.data.simulation);
-                if (res.data.logs) setLogs(prev => [...res.data.logs.slice(0, 5), ...prev].slice(0, 50)); // Append recent logs, keep 50
-
-                // Show "Thinking..." status if backend says so
-                if (res.data.is_thinking) {
-                    // Maybe show a spinner? For now, 'loading' state covers it manually
-                }
-
+                if (res.data.logs) setLogs(prev => [...res.data.logs.slice(0, 5), ...prev].slice(0, 50));
                 setLastUpdated(new Date().toLocaleTimeString());
             }
         } catch (err) {
@@ -97,8 +92,8 @@ function App() {
 
     const deriveMarketMood = (decisions: Decision[]) => {
         const volCount = decisions.filter(d => d.Rational.some(r => r.includes("High Volatility"))).length;
-        if (volCount > decisions.length / 2) setMarketMood("HIGH VOLATILITY (FEAR)");
-        else setMarketMood("LOW VOLATILITY (COILED)");
+        if (volCount > decisions.length / 2) setMarketMood("VOLATILE");
+        else setMarketMood("CALM");
     };
 
     const openDetails = (ticker: string, action: string, rational: string[], confidence: number, history: any[]) => {
@@ -110,14 +105,12 @@ function App() {
         runScan();
     }, []);
 
-    // Lock Logic: Can only turn off if DEAD (or if not started)
     const isLocked = isAuto && simState?.status !== 'DEAD';
 
     return (
         <Router>
-            <div className="min-h-screen bg-marine text-mist font-sans selection:bg-teal/30 cursor-fancy flex flex-col relative">
+            <div className="min-h-screen bg-void text-chalk font-body selection:bg-amber/20 cursor-fancy flex flex-col relative">
 
-                <ParticleBackground />
                 <CustomCursor />
                 <Header />
 
@@ -136,12 +129,11 @@ function App() {
                                 marketMood={marketMood}
                                 lastUpdated={lastUpdated}
                                 onScan={() => {
-                                    // Prevent stopping if locked
                                     if (isLocked) return;
                                     setIsAuto(!isAuto);
                                 }}
                                 isAuto={isAuto}
-                                isLocked={isLocked} // Pass Lock State
+                                isLocked={isLocked}
                                 onDetails={openDetails}
                                 simState={simState}
                                 onResetSim={resetSim}

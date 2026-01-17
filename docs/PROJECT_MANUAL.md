@@ -15,12 +15,15 @@
     - *Timeframe*: Daily.
     - *Purpose*: Filters the "Universe" (500+ stocks) for specific setups (Hammer, Engulfing).
     - *Output*: Watchlist for the next day.
-2.  **Intraday Sniper (`scan_intraday.py` - Active)**:
-    - *Timeframe*: 15-minute / 5-minute.
+2.  **Intraday Sniper (`Expert 1`)**:
     - *Purpose*: Executing the "Sniper" trade.
     - *Triggers*: VWAP cross, RSI Momentum, Volume Spikes.
-3.  **Derivatives Engine (`scan_volatility.py` - Active)**:
+3.  **Derivatives Engine (`Expert 2`)**:
     - *Purpose*: Generating income from "Neutral" stocks via Option Selling (HV Rank).
+4.  **RL Agent (`Expert 3`)**:
+    - *Purpose*: Deep Learning (PPO) signal used as a "Booster" for high-confidence setups.
+5.  **Quant Expert (`Expert 4`)**:
+    - *Purpose*: The "Validator". Runs Monte Carlo simulations (Heston Model) on shortlisted candidates to calculate mathematical Win Probability.
 
 ### Data Pipeline (`src/`)
 - **`data_loader.py`**: Handles Daily data fetching & Feature Engineering (RSI, EMA, Patterns).

@@ -1,47 +1,203 @@
+@import url('https://fonts.googleapis.com/css2?family=Figtree:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Syne:wght@400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* === Observatory Design System === */
+
+:root {
+    /* Semantic tokens */
+    --color-surface-0: #0D0D0F;
+    --color-surface-1: #141418;
+    --color-surface-2: #1E1E24;
+    --color-border: #2A2A32;
+    --color-border-subtle: rgba(255, 255, 255, 0.06);
+
+    --color-signal-primary: #F59E0B;
+    --color-signal-positive: #10B981;
+    --color-signal-negative: #EF4444;
+    --color-signal-warning: #F97316;
+
+    --color-text-primary: #F5F5F5;
+    --color-text-secondary: #A1A1AA;
+    --color-text-muted: #71717A;
+}
+
 @layer base {
+    html {
+        font-family: 'Figtree', system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+
     body {
-        @apply bg-marine text-mist font-sans antialiased overflow-y-auto;
+        @apply bg-void text-chalk antialiased overflow-y-auto;
+        background-image:
+            radial-gradient(ellipse 80% 50% at 50% -20%, rgba(245, 158, 11, 0.08), transparent),
+            url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    }
+
+    /* Editorial Typography */
+    h1,
+    h2,
+    h3,
+    h4 {
+        font-family: 'Syne', sans-serif;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+    }
+
+    /* Mono elements */
+    code,
+    pre,
+    .font-mono {
+        font-family: 'JetBrains Mono', monospace;
+    }
+}
+
+@layer components {
+
+    /* Observatory Panel - Core card component */
+    .panel {
+        @apply bg-obsidian/80 backdrop-blur-xl rounded-2xl border border-graphite/50;
+        box-shadow:
+            inset 0 1px 0 0 rgba(255, 255, 255, 0.03),
+            0 25px 50px -12px rgba(0, 0, 0, 0.4);
+    }
+
+    .panel-elevated {
+        @apply panel;
+        background: linear-gradient(180deg, rgba(30, 30, 36, 0.6) 0%, rgba(20, 20, 24, 0.8) 100%);
+    }
+
+    /* Signal Indicator */
+    .signal-badge {
+        @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold uppercase tracking-wider;
+    }
+
+    .signal-badge-amber {
+        @apply signal-badge bg-amber/10 text-amber border border-amber/20;
+    }
+
+    .signal-badge-sage {
+        @apply signal-badge bg-sage/10 text-sage border border-sage/20;
+    }
+
+    .signal-badge-crimson {
+        @apply signal-badge bg-crimson/10 text-crimson border border-crimson/20;
+    }
+
+    .signal-badge-muted {
+        @apply signal-badge bg-iron/30 text-smoke border border-iron/50;
+    }
+
+    /* Button Styles */
+    .btn-primary {
+        @apply relative px-6 py-3 rounded-xl font-semibold text-sm;
+        @apply bg-gradient-to-b from-amber to-amber/90;
+        @apply text-void shadow-lg shadow-amber/20;
+        @apply hover:shadow-xl hover:shadow-amber/30 hover:scale-[1.02];
+        @apply active:scale-[0.98] transition-all duration-200;
+    }
+
+    .btn-ghost {
+        @apply px-5 py-2.5 rounded-xl text-sm font-medium;
+        @apply bg-white/5 text-ash border border-white/5;
+        @apply hover:bg-white/10 hover:text-chalk hover:border-white/10;
+        @apply transition-all duration-200;
+    }
+
+    /* Glass morphism utility */
+    .glass {
+        @apply bg-obsidian/60 backdrop-blur-xl border border-white/5;
+        box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.03);
     }
 }
 
 @layer utilities {
-    .glass {
-        @apply bg-gunmetal/40 backdrop-blur-md border border-teal/10 shadow-xl;
+
+    /* Text gradient utility */
+    .text-gradient {
+        @apply bg-clip-text text-transparent bg-gradient-to-r from-chalk to-ash;
+    }
+
+    .text-gradient-amber {
+        @apply bg-clip-text text-transparent bg-gradient-to-r from-amber to-ember;
+    }
+
+    /* Glow utilities */
+    .glow-amber {
+        box-shadow: 0 0 40px -10px rgba(245, 158, 11, 0.4);
+    }
+
+    .glow-sage {
+        box-shadow: 0 0 40px -10px rgba(16, 185, 129, 0.4);
+    }
+
+    .glow-crimson {
+        box-shadow: 0 0 40px -10px rgba(239, 68, 68, 0.4);
+    }
+
+    /* Inner glow for depth */
+    .inner-glow {
+        box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
     }
 }
 
-/* --- Scrollbar --- */
+/* === Scrollbar === */
 ::-webkit-scrollbar {
-    width: 8px;
+    width: 6px;
+    height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-    @apply bg-marine;
+    @apply bg-transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-    @apply bg-gunmetal rounded-full;
+    @apply bg-graphite/60 rounded-full;
+    border: 2px solid transparent;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    @apply bg-teal;
+    @apply bg-iron;
 }
 
-/* --- Cursor --- */
+/* === Custom Cursor === */
 .cursor-fancy {
     cursor: none;
 }
 
 .cursor-dot {
-    @apply fixed top-0 left-0 w-2 h-2 bg-teal rounded-full pointer-events-none z-[9999];
+    @apply fixed top-0 left-0 w-1.5 h-1.5 bg-amber rounded-full pointer-events-none z-[9999];
     transform: translate(-50%, -50%);
 }
 
 .cursor-outline {
-    @apply fixed top-0 left-0 w-8 h-8 border border-teal rounded-full pointer-events-none transition-transform duration-150 ease-out z-[9999];
+    @apply fixed top-0 left-0 w-8 h-8 border border-amber/50 rounded-full pointer-events-none z-[9999];
     transform: translate(-50%, -50%);
+    transition: transform 0.15s ease-out, border-color 0.2s;
+}
+
+/* === Selection === */
+::selection {
+    @apply bg-amber/30 text-chalk;
+}
+
+/* === Focus States (Accessibility) === */
+*:focus-visible {
+    @apply outline-none ring-2 ring-amber/50 ring-offset-2 ring-offset-void;
+}
+
+/* === Reduced Motion === */
+@media (prefers-reduced-motion: reduce) {
+
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
 }
