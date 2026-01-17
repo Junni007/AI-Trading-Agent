@@ -123,7 +123,7 @@ class TradingAgent(pl.LightningModule):
             R = r + self.gamma * R
             returns.insert(0, R)
             
-        returns = torch.tensor(returns).to(self.device)
+        returns = torch.tensor(returns, dtype=torch.float32).to(self.device)
         returns = (returns - returns.mean()) / (returns.std() + 1e-7) # Normalize
         
         # 3. PPO Update
