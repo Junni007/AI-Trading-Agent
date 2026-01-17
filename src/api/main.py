@@ -1,15 +1,18 @@
+"""
+Lightweight API for Koyeb Free Tier (256MB RAM limit)
+- Lazy loads heavy modules only when needed
+- Minimal startup memory footprint
+"""
 from fastapi import FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import logging
-from src.brain.hybrid import HybridBrain
-from src.simulation.engine import SimulationEngine
 
 # Configure Logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("API")
 
-app = FastAPI(title="Sniper Trading Agent API", version="1.0")
+app = FastAPI(title="Signal Engine API (Lite)", version="1.0")
 
 # Allow CORS for Frontend
 app.add_middleware(
@@ -20,52 +23,74 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize Brain & Sim Engine
-brain = HybridBrain()
-sim_engine = SimulationEngine()
-
-@app.get("/")
-def home():
-    return {"status": "Online", "message": "Sniper Agent is Ready."}
-
-# Global State for Async Scanning
+# Global State - Lazy initialized
+brain = None
+sim_engine = None
 LATEST_DECISIONS = []
 LATEST_LOGS = []
 IS_SCANNING = False
+
+def get_brain():
+    """Lazy load the brain to avoid startup memory issues"""
+    global brain
+    if brain is None:
+        logger.info("🧠 Loading HybridBrain...")
+        from src.brain.hybrid import HybridBrain
+        brain = HybridBrain()
+    return brain
+
+def get_sim_engine():
+    """Lazy load the simulation engine"""
+    global sim_engine
+    if sim_engine is None:
+        logger.info("🎮 Loading SimulationEngine...")
+        from src.simulation.engine import SimulationEngine
+        sim_engine = SimulationEngine()
+    return sim_engine
+
+@app.get("/")
+def home():
+    return {"status": "Online", "message": "Signal Engine (Lite) is Ready."}
+
+@app.get("/health")
+def health():
+    """Health check endpoint for Koyeb"""
+    return {"status": "healthy"}
 
 def background_scan():
     global LATEST_DECISIONS, LATEST_LOGS, IS_SCANNING
     try:
         logger.info("🧠 Brain started thinking...")
-        decisions = brain.think()
+        _brain = get_brain()
+        _sim = get_sim_engine()
         
-        # Determine Regime (Simple Heuristic: majority of income votes)
-        # In a real system, the Brain would output a global 'regime' field
+        decisions = _brain.think()
+        
+        # Determine Regime
         regime = "NEUTRAL"
         vol_count = sum(1 for d in decisions if "High Volatility" in str(d.get('Rational', [])))
         if vol_count > len(decisions) * 0.3:
             regime = "HIGH_VOLATILITY"
         
-        # RL Simulation Tick (Auto-Run)
-        logs = sim_engine.process_tick(decisions, regime=regime)
+        # Simulation Tick
+        logs = _sim.process_tick(decisions, regime=regime)
         
         # Sort by Confidence
         decisions.sort(key=lambda x: x['Confidence'], reverse=True)
         
-        # Update Global State
         LATEST_DECISIONS = decisions
         LATEST_LOGS = logs
         logger.info("✅ Brain finished thinking.")
     except Exception as e:
         logger.error(f"Scan failed: {e}")
+        import traceback
+        traceback.print_exc()
     finally:
         IS_SCANNING = False
 
 @app.get("/api/scan")
 def run_scan(background_tasks: BackgroundTasks):
-    """
-    Triggers the Hybrid Brain to think in the background.
-    """
+    """Triggers the Hybrid Brain to think in the background."""
     global IS_SCANNING
     if IS_SCANNING:
         return {"status": "busy", "message": "Brain is already thinking."}
@@ -76,25 +101,26 @@ def run_scan(background_tasks: BackgroundTasks):
 
 @app.get("/api/results")
 def get_results():
-    """
-    Returns the latest available scan results.
-    """
+    """Returns the latest available scan results."""
+    _sim = get_sim_engine() if sim_engine else None
     return {
         "status": "success", 
         "data": LATEST_DECISIONS, 
-        "simulation": sim_engine.get_portfolio(),
+        "simulation": _sim.get_portfolio() if _sim else {},
         "logs": LATEST_LOGS,
         "is_thinking": IS_SCANNING
     }
 
 @app.get("/api/simulation/state")
 def get_sim_state():
-    return sim_engine.get_portfolio()
+    _sim = get_sim_engine() if sim_engine else None
+    return _sim.get_portfolio() if _sim else {"status": "not_loaded"}
 
 @app.post("/api/simulation/reset")
 def reset_sim():
-    sim_engine.reset()
-    return {"status": "reset", "state": sim_engine.get_portfolio()}
+    _sim = get_sim_engine()
+    _sim.reset()
+    return {"status": "reset", "state": _sim.get_portfolio()}
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000, workers=1)
