@@ -1,20 +1,17 @@
 """
-Lightweight API for Koyeb Free Tier (256MB RAM limit)
-- Lazy loads heavy modules only when needed
-- Minimal startup memory footprint
+Standalone Demo API for Koyeb Free Tier
+- Zero heavy dependencies at import time
+- Returns mock/demo data for frontend testing
+- Can be upgraded later when on better hosting
 """
-from fastapi import FastAPI, BackgroundTasks
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
-import logging
+import random
+from datetime import datetime
 
-# Configure Logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("API")
+app = FastAPI(title="Signal Engine API (Demo)", version="1.0")
 
-app = FastAPI(title="Signal Engine API (Lite)", version="1.0")
-
-# Allow CORS for Frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -23,104 +20,115 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Global State - Lazy initialized
-brain = None
-sim_engine = None
-LATEST_DECISIONS = []
-LATEST_LOGS = []
-IS_SCANNING = False
+# Demo tickers
+DEMO_TICKERS = ["RELIANCE", "TCS", "INFY", "HDFC", "ICICIBANK", "SBIN", "BHARTIARTL", "ITC", "KOTAKBANK", "LT"]
 
-def get_brain():
-    """Lazy load the brain to avoid startup memory issues"""
-    global brain
-    if brain is None:
-        logger.info("🧠 Loading HybridBrain...")
-        from src.brain.hybrid import HybridBrain
-        brain = HybridBrain()
-    return brain
+# Simulation state
+sim_state = {
+    "balance": 100000,
+    "holdings": {},
+    "level": 1,
+    "total_trades": 0,
+    "wins": 0,
+    "losses": 0,
+    "status": "ALIVE",
+    "portfolio_history": [100000]
+}
 
-def get_sim_engine():
-    """Lazy load the simulation engine"""
-    global sim_engine
-    if sim_engine is None:
-        logger.info("🎮 Loading SimulationEngine...")
-        from src.simulation.engine import SimulationEngine
-        sim_engine = SimulationEngine()
-    return sim_engine
+def generate_demo_signals():
+    """Generate realistic-looking demo trading signals"""
+    signals = []
+    actions = ["BUY", "SELL", "HOLD"]
+    
+    for ticker in random.sample(DEMO_TICKERS, min(5, len(DEMO_TICKERS))):
+        confidence = random.uniform(0.5, 0.95)
+        action = random.choice(actions)
+        
+        rationales = []
+        if confidence > 0.8:
+            rationales.append("Strong momentum detected")
+        if action == "BUY":
+            rationales.append("RSI showing oversold conditions")
+            rationales.append("MACD bullish crossover")
+        elif action == "SELL":
+            rationales.append("RSI overbought")
+            rationales.append("Resistance level reached")
+        else:
+            rationales.append("Consolidation phase")
+        
+        signals.append({
+            "Ticker": ticker,
+            "Action": action,
+            "Confidence": round(confidence * 100, 2),
+            "Rational": rationales,
+            "QuantRisk": {
+                "WinRate": round(random.uniform(0.55, 0.75), 2),
+                "EV": round(random.uniform(0.5, 2.5), 2),
+                "VaR95": round(random.uniform(-5, -2), 2),
+                "MaxDrawdown": round(random.uniform(-10, -3), 2)
+            }
+        })
+    
+    signals.sort(key=lambda x: x["Confidence"], reverse=True)
+    return signals
 
 @app.get("/")
 def home():
-    return {"status": "Online", "message": "Signal Engine (Lite) is Ready."}
+    return {
+        "status": "Online",
+        "message": "Signal Engine (Demo Mode) is Ready.",
+        "mode": "demo",
+        "note": "This is a demo API. Full features require upgraded hosting."
+    }
 
 @app.get("/health")
 def health():
-    """Health check endpoint for Koyeb"""
     return {"status": "healthy"}
 
-def background_scan():
-    global LATEST_DECISIONS, LATEST_LOGS, IS_SCANNING
-    try:
-        logger.info("🧠 Brain started thinking...")
-        _brain = get_brain()
-        _sim = get_sim_engine()
-        
-        decisions = _brain.think()
-        
-        # Determine Regime
-        regime = "NEUTRAL"
-        vol_count = sum(1 for d in decisions if "High Volatility" in str(d.get('Rational', [])))
-        if vol_count > len(decisions) * 0.3:
-            regime = "HIGH_VOLATILITY"
-        
-        # Simulation Tick
-        logs = _sim.process_tick(decisions, regime=regime)
-        
-        # Sort by Confidence
-        decisions.sort(key=lambda x: x['Confidence'], reverse=True)
-        
-        LATEST_DECISIONS = decisions
-        LATEST_LOGS = logs
-        logger.info("✅ Brain finished thinking.")
-    except Exception as e:
-        logger.error(f"Scan failed: {e}")
-        import traceback
-        traceback.print_exc()
-    finally:
-        IS_SCANNING = False
-
 @app.get("/api/scan")
-def run_scan(background_tasks: BackgroundTasks):
-    """Triggers the Hybrid Brain to think in the background."""
-    global IS_SCANNING
-    if IS_SCANNING:
-        return {"status": "busy", "message": "Brain is already thinking."}
-    
-    IS_SCANNING = True
-    background_tasks.add_task(background_scan)
-    return {"status": "started", "message": "Scan triggered in background."}
+def run_scan():
+    return {"status": "started", "message": "Scan triggered (demo mode)."}
 
 @app.get("/api/results")
 def get_results():
-    """Returns the latest available scan results."""
-    _sim = get_sim_engine() if sim_engine else None
+    signals = generate_demo_signals()
+    
+    # Simulate portfolio changes
+    change = random.uniform(-500, 1000)
+    sim_state["balance"] = max(0, sim_state["balance"] + change)
+    sim_state["portfolio_history"].append(sim_state["balance"])
+    if len(sim_state["portfolio_history"]) > 50:
+        sim_state["portfolio_history"] = sim_state["portfolio_history"][-50:]
+    
     return {
-        "status": "success", 
-        "data": LATEST_DECISIONS, 
-        "simulation": _sim.get_portfolio() if _sim else {},
-        "logs": LATEST_LOGS,
-        "is_thinking": IS_SCANNING
+        "status": "success",
+        "data": signals,
+        "simulation": sim_state,
+        "logs": [
+            f"[{datetime.now().strftime('%H:%M:%S')}] Demo scan completed",
+            f"[{datetime.now().strftime('%H:%M:%S')}] Generated {len(signals)} signals"
+        ],
+        "is_thinking": False
     }
 
 @app.get("/api/simulation/state")
 def get_sim_state():
-    _sim = get_sim_engine() if sim_engine else None
-    return _sim.get_portfolio() if _sim else {"status": "not_loaded"}
+    return sim_state
 
 @app.post("/api/simulation/reset")
 def reset_sim():
-    _sim = get_sim_engine()
-    _sim.reset()
-    return {"status": "reset", "state": _sim.get_portfolio()}
+    global sim_state
+    sim_state = {
+        "balance": 100000,
+        "holdings": {},
+        "level": 1,
+        "total_trades": 0,
+        "wins": 0,
+        "losses": 0,
+        "status": "ALIVE",
+        "portfolio_history": [100000]
+    }
+    return {"status": "reset", "state": sim_state}
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000, workers=1)
+    uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -1,29 +1,9 @@
-# ===== Lightweight Requirements for Koyeb Free Tier =====
-# No GPU/CUDA - reduces image from 4GB to ~500MB
+# ===== Minimal Requirements for Koyeb Free Tier =====
+# Demo API - no heavy ML dependencies
 
 # Web Framework
 fastapi
-uvicorn
+uvicorn[standard]
 gunicorn
-python-multipart
 
-# Data & Analysis
-pandas
-numpy
-yfinance
-ta
-lxml
-
-# ML (CPU-only PyTorch - MUCH smaller)
---extra-index-url https://download.pytorch.org/whl/cpu
-torch
-gymnasium
-pytorch-lightning
-
-# Other
-scikit-learn
-matplotlib
-pydantic-settings
-requests
-beautifulsoup4
-
+# That's it! Just what we need to serve the API
