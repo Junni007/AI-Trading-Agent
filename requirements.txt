@@ -13,7 +13,7 @@ scikit-learn
 optuna
 optuna-integration
 lxml
-
+gymnasium
 pydantic-settings
 pytest
 httpx
