@@ -1,19 +1,26 @@
+# ===== Lightweight Requirements for Koyeb Free Tier =====
+# No GPU/CUDA - reduces image from 4GB to ~500MB
+
+# Web Framework
 fastapi
 uvicorn
 gunicorn
 python-multipart
+
+# Data & Analysis
 pandas
 numpy
 yfinance
 ta
-torch
-pytorch-lightning
-lightning
-matplotlib
-scikit-learn
-optuna
-optuna-integration
 lxml
+
+# ML (CPU-only PyTorch - MUCH smaller)
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+
+# Other
+scikit-learn
+matplotlib
 pydantic-settings
-pytest
-httpx
+requests
+beautifulsoup4
