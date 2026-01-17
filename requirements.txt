@@ -17,6 +17,8 @@ lxml
 # ML (CPU-only PyTorch - MUCH smaller)
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch
+gymnasium
+pytorch-lightning
 
 # Other
 scikit-learn
@@ -24,3 +26,4 @@ matplotlib
 pydantic-settings
 requests
 beautifulsoup4
+
