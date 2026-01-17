@@ -11,6 +11,9 @@ import { Dashboard } from './pages/Dashboard';
 import { Signals } from './pages/Signals';
 import { Settings } from './pages/Settings';
 
+// API Base URL (uses env var in production, localhost in dev)
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 interface Decision {
     Ticker: string;
     Action: string;
@@ -46,7 +49,7 @@ function App() {
 
     // Fetch initial Sim State
     useEffect(() => {
-        axios.get('http://localhost:8000/api/simulation/state')
+        axios.get(`${API_URL}/api/simulation/state`)
             .then(res => setSimState(res.data))
             .catch(err => console.error(err));
     }, []);
@@ -65,8 +68,8 @@ function App() {
     const runScan = async (silent = false) => {
         if (!silent) setLoading(true);
         try {
-            await axios.get('http://localhost:8000/api/scan');
-            const res = await axios.get('http://localhost:8000/api/results');
+            await axios.get(`${API_URL}/api/scan`);
+            const res = await axios.get(`${API_URL}/api/results`);
 
             if (res.data.status === 'success') {
                 if (res.data.data && res.data.data.length > 0) {
@@ -85,7 +88,7 @@ function App() {
 
     const resetSim = async () => {
         try {
-            const res = await axios.post('http://localhost:8000/api/simulation/reset');
+            const res = await axios.post(`${API_URL}/api/simulation/reset`);
             setSimState(res.data.state);
         } catch (err) { console.error(err); }
     };
