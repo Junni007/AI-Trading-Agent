@@ -109,7 +109,6 @@ def main():
         callbacks=[checkpoint_callback, early_stop_callback],
         enable_progress_bar=True,
         log_every_n_steps=10,
-        gradient_clip_val=0.5,  # Gradient clipping for stability
     )
     
     logger.info("Starting PPO Training...")
