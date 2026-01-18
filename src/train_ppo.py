@@ -63,9 +63,9 @@ def prepare_training_data(num_tickers: int = 50):
     return train_df
 
 def main():
-    # Hyperparameters
-    NUM_TICKERS = 10  # Start small for faster iteration
-    NUM_EPOCHS = 500  # Number of "rollouts"
+    # Hyperparameters - Optimized for better learning
+    NUM_TICKERS = 20  # Increased for more diverse training data
+    NUM_EPOCHS = 200  # Reduced epochs, better rollout quality instead
     
     # 1. Prepare Data
     import pandas as pd
@@ -78,8 +78,8 @@ def main():
     # 2. Create Environment
     env = TradingEnv(train_df, initial_balance=10000, window_size=50)
     
-    # 3. Create Agent
-    agent = TradingAgent(env, lr=1e-4, gamma=0.99, clip_eps=0.2)
+    # 3. Create Agent - Tuned hyperparameters
+    agent = TradingAgent(env, lr=3e-4, gamma=0.99, clip_eps=0.1)  # Higher LR, lower clip
     
     # 4. Setup Callbacks
     checkpoint_dir = "checkpoints"
@@ -101,13 +101,15 @@ def main():
         verbose=True
     )
     
-    # 5. Train
+    # 5. Train - Optimized configuration
     trainer = pl.Trainer(
         max_epochs=NUM_EPOCHS,
         accelerator='auto',  # Uses GPU if available
+        precision='16-mixed',  # Mixed precision for ~2x speedup
         callbacks=[checkpoint_callback, early_stop_callback],
         enable_progress_bar=True,
         log_every_n_steps=10,
+        gradient_clip_val=0.5,  # Gradient clipping for stability
     )
     
     logger.info("Starting PPO Training...")

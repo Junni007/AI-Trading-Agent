@@ -39,8 +39,8 @@ class TradingEnv(gym.Env):
         dummy_feats = self.processor.process(dummy_data)
         self.n_features = len(dummy_feats)
         
-        # +2 for Balance (normalized/scaled) and Position (normalized)
-        self.obs_shape = (self.n_features + 2,) 
+        # +4 for Balance, Position%, PnL%, current price change
+        self.obs_shape = (self.n_features + 4,) 
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=self.obs_shape, dtype=np.float32)
         
         # State variables
@@ -76,13 +76,19 @@ class TradingEnv(gym.Env):
         # TDA Features
         tda_feats = self.processor.process(window)
         
-        # Account info
-        # Normalize balance (log scale or relative)
-        # Using simple scaling mainly for demo purposes
-        balance_feat = np.log1p(self.balance)
-        position_feat = self.position # Simply number of shares, better would be % of portfolio
+        # Get current price for calculations
+        current_price = price_data[self.current_step - 1] if self.current_step > 0 else price_data[0]
         
-        obs = np.concatenate((tda_feats, [balance_feat, position_feat]))
+        # Account info - richer features for better learning
+        net_worth = self.balance + self.position * current_price
+        balance_feat = np.log1p(self.balance)  # Log-scaled balance
+        position_pct = (self.position * current_price) / (net_worth + 1e-7)  # Position as % of portfolio
+        pnl_pct = (net_worth - self.initial_balance) / self.initial_balance  # PnL as %
+        
+        # Price momentum (simple return over window)
+        price_return = (price_data[self.current_step - 1] - price_data[self.current_step - 10]) / (price_data[self.current_step - 10] + 1e-7) if self.current_step >= 10 else 0.0
+        
+        obs = np.concatenate((tda_feats, [balance_feat, position_pct, pnl_pct, price_return]))
         return obs.astype(np.float32)
 
     def step(self, action):
@@ -101,28 +107,29 @@ class TradingEnv(gym.Env):
         # 1: Buy (Buy 1 share - simplified)
         # 2: Sell (Sell 1 share - simplified)
         
-        # More realistic: Buy max possible, Sell all. let's stick to simple "unit" trading or full position.
-        # Let's do: Buy = Invest 10% of remaining balance, Sell = Sell 10% of position.
-        # Or even simpler for RL convergence: Fixed unit.
+        # Position sizing: Trade 10% of portfolio value for meaningful learning signal
+        trade_fraction = 0.10
+        trade_value = prev_net_worth * trade_fraction
+        unit = trade_value / current_price if current_price > 0 else 0
         
-        unit = 1 # Share
-        
-        if action == 1: # Buy
+        if action == 1:  # Buy
             cost = current_price * unit
             if self.balance >= cost:
                 self.balance -= cost
                 self.position += unit
-        elif action == 2: # Sell
-             if self.position >= unit:
-                 self.balance += current_price * unit
-                 self.position -= unit
+        elif action == 2:  # Sell
+            sell_amount = min(unit, self.position)  # Can't sell more than we have
+            if sell_amount > 0:
+                self.balance += current_price * sell_amount
+                self.position -= sell_amount
                  
-        # Calculate Reward
+        # Calculate Reward - SCALED for better learning signal
         current_net_worth = self.balance + self.position * current_price
         self.net_worth_history.append(current_net_worth)
         
-        # Reward = Log Return of Net Worth
-        reward = np.log(current_net_worth / prev_net_worth) if prev_net_worth > 0 else 0
+        # Reward = Percentage change * 100 for meaningful gradient signal
+        pct_change = (current_net_worth - prev_net_worth) / prev_net_worth if prev_net_worth > 0 else 0
+        reward = pct_change * 100  # Scale up significantly
         
         # Advance step
         self.current_step += 1

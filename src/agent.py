@@ -87,8 +87,8 @@ class TradingAgent(pl.LightningModule):
         done = False
         states, actions, log_probs, rewards, values, dones = [], [], [], [], [], []
         
-        # Simulate N steps or until done (Truncated for efficiency)
-        rollout_steps = 200 
+        # Simulate N steps or until done - increased for better policy gradients
+        rollout_steps = 500  # Increased from 200 for more stable updates
         for _ in range(rollout_steps):
             state_tensor = torch.FloatTensor(state).to(self.device)
             probs, value = self.model(state_tensor.unsqueeze(0))
@@ -156,6 +156,8 @@ class TradingAgent(pl.LightningModule):
         
         optimizer.zero_grad()
         self.manual_backward(loss)
+        # Add gradient clipping for stability
+        torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=0.5)
         optimizer.step()
         
         self.log("train_loss", loss, prog_bar=True)
