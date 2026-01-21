@@ -5,11 +5,13 @@ import { CustomCursor } from './components/CustomCursor';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { DetailsModal } from './components/DetailsModal';
+import { notificationService } from './services/notificationService';
 
 // Pages
 import { Dashboard } from './pages/Dashboard';
 import { Signals } from './pages/Signals';
 import { Settings } from './pages/Settings';
+import { Analytics } from './pages/Analytics';
 
 interface Decision {
     Ticker: string;
@@ -72,6 +74,17 @@ function App() {
                 if (res.data.data && res.data.data.length > 0) {
                     setData(res.data.data);
                     deriveMarketMood(res.data.data);
+
+                    // Send notifications for high-confidence signals
+                    res.data.data.forEach((signal: Decision) => {
+                        if (signal.Confidence >= 0.85) {
+                            notificationService.sendSignalAlert(
+                                signal.Ticker,
+                                signal.Action,
+                                signal.Confidence
+                            );
+                        }
+                    });
                 }
                 if (res.data.simulation) setSimState(res.data.simulation);
                 if (res.data.logs) setLogs(prev => [...res.data.logs.slice(0, 5), ...prev].slice(0, 50));
@@ -141,6 +154,7 @@ function App() {
                             />
                         } />
                         <Route path="/signals" element={<Signals data={data} />} />
+                        <Route path="/analytics" element={<Analytics simState={simState} />} />
                         <Route path="/settings" element={<Settings />} />
                     </Routes>
                 </main>

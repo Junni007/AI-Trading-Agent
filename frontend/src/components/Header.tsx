@@ -20,6 +20,7 @@ export const Header = () => {
     const navItems = [
         { path: '/', label: 'Dashboard' },
         { path: '/signals', label: 'Signals' },
+        { path: '/analytics', label: 'Analytics' },
         { path: '/settings', label: 'Config' },
     ];
 

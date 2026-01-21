@@ -2,6 +2,7 @@ import logging
 import json
 import os
 from datetime import datetime
+import numpy as np
 
 from src.config import settings
 
@@ -32,7 +33,8 @@ class SimulationEngine:
             try:
                 with open(DB_PATH, 'r') as f:
                     return json.load(f)
-            except:
+            except (json.JSONDecodeError, OSError) as e:
+                logger.warning(f"Failed to load state: {e}")
                 return None
         return None
         
@@ -186,7 +188,6 @@ class SimulationEngine:
 
     def calculate_stats(self):
         """Calculates Max Drawdown and Sharpe Ratio"""
-        import numpy as np
         curve = self.state.get('equity_curve', [])
         if len(curve) < 2: return
         

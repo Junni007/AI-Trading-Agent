@@ -9,6 +9,12 @@ venv/
 .venv/
 pip-log.txt
 pip-delete-this-directory.txt
+.env
+.agent/
+.pytest_cache/
+.shared/
+.lightning_logs/
+
 
 # VS Code
 .vscode/

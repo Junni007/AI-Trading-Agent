@@ -1,10 +1,11 @@
 from pydantic_settings import BaseSettings
 from pathlib import Path
+from typing import Literal
 
 class Settings(BaseSettings):
     # App Config
-    APP_NAME: str = "Sniper Trading Agent"
-    VERSION: str = "1.0.0"
+    APP_NAME: str = "Signal.Engine"
+    VERSION: str = "2.5.0"
     DEBUG: bool = False
     
     # Paths
@@ -19,7 +20,16 @@ class Settings(BaseSettings):
     # Simulation Defaults
     INITIAL_BALANCE: float = 10000.0
     
+    # Data Provider Configuration
+    DATA_PROVIDER: Literal["alpaca", "yfinance"] = "yfinance"  # Default to yfinance for compatibility
+    
+    # Alpaca API (optional - for real-time data)
+    ALPACA_API_KEY: str = ""
+    ALPACA_SECRET_KEY: str = ""
+    ALPACA_PAPER: bool = True  # Use paper trading endpoint
+    
     class Config:
         env_file = ".env"
 
 settings = Settings()
+

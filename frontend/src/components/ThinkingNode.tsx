@@ -23,7 +23,9 @@ export const ThinkingNode: React.FC<ThinkingNodeProps> = ({ ticker, regime, acti
     const getSignalStyles = () => {
         if (isWatch) {
             return {
-                accent: 'amber',
+                accentBgClass: 'bg-amber',
+                accentTextClass: 'text-amber',
+                accentBgOpacityClass: 'bg-amber/60',
                 badgeClass: 'signal-badge bg-amber/10 text-amber border-amber/20',
                 glowClass: 'hover:shadow-amber/10',
                 icon: <Eye size={12} />,
@@ -31,14 +33,18 @@ export const ThinkingNode: React.FC<ThinkingNodeProps> = ({ ticker, regime, acti
         }
         if (isIncome) {
             return {
-                accent: 'sage',
+                accentBgClass: 'bg-sage',
+                accentTextClass: 'text-sage',
+                accentBgOpacityClass: 'bg-sage/60',
                 badgeClass: 'signal-badge bg-sage/10 text-sage border-sage/20',
                 glowClass: 'hover:shadow-sage/10',
                 icon: <Shield size={12} />,
             };
         }
         return {
-            accent: 'ember',
+            accentBgClass: 'bg-ember',
+            accentTextClass: 'text-ember',
+            accentBgOpacityClass: 'bg-ember/60',
             badgeClass: 'signal-badge bg-ember/10 text-ember border-ember/20',
             glowClass: 'hover:shadow-ember/10',
             icon: <Zap size={12} />,
@@ -59,12 +65,12 @@ export const ThinkingNode: React.FC<ThinkingNodeProps> = ({ ticker, regime, acti
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95 }}
             transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-            className={`group relative flex flex-col justify-between panel p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl ${signal.glowClass}`}
+            className={`group relative flex flex-col justify-between panel p-5 cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl ${signal.glowClass}`}
         >
             {/* High Confidence Indicator */}
             {confidence >= 0.8 && (
                 <motion.div
-                    className={`absolute top-3 right-3 w-2 h-2 rounded-full bg-${signal.accent}`}
+                    className={`absolute top-3 right-3 w-2 h-2 rounded-full ${signal.accentBgClass}`}
                     animate={{ opacity: [0.5, 1, 0.5] }}
                     transition={{ repeat: Infinity, duration: 2 }}
                 />
@@ -115,7 +121,7 @@ export const ThinkingNode: React.FC<ThinkingNodeProps> = ({ ticker, regime, acti
                             strokeDasharray={arcLength}
                             strokeDashoffset={arcOffset}
                             strokeLinecap="round"
-                            className={`text-${signal.accent}`}
+                            className={signal.accentTextClass}
                         />
                     </svg>
                     <span className="font-mono text-sm font-bold text-chalk">{confidencePercent}</span>
@@ -132,7 +138,7 @@ export const ThinkingNode: React.FC<ThinkingNodeProps> = ({ ticker, regime, acti
             <div className="space-y-2 mb-5 flex-grow">
                 {steps.slice(-2).map((step, idx) => (
                     <div key={idx} className="flex items-start gap-2.5">
-                        <div className={`mt-1.5 w-1 h-1 rounded-full bg-${signal.accent}/60`} />
+                        <div className={`mt-1.5 w-1 h-1 rounded-full ${signal.accentBgOpacityClass}`} />
                         <p className="text-xs text-ash leading-relaxed line-clamp-2 font-body">
                             {step}
                         </p>

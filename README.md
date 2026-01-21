@@ -26,12 +26,16 @@ Shortlisted candidates are passed to the **Quant Expert**:
 
 ---
 
-## ✨ Features (v2.1)
+## ✨ Features (v2.5)
 
 *   **Real-Time Dashboard**: A futuristic, distraction-free UI built with React & Tailwind.
     *   **"Void" Aesthetic**: Deep dark mode with holographic accents.
     *   **Live Sparklines**: Visual price history for every signal.
     *   **Signal Badges**: visual indicators for "AI" approval and "Monte Carlo" win rates.
+*   **🔌 WebSocket Integration**: Real-time updates without polling.
+*   **📊 Analytics Dashboard**: Equity curves, return distribution, win/loss ratios, and risk metrics.
+*   **🔔 Alert System**: Browser notifications for high-confidence signals.
+*   **📱 PWA Support**: Install as app on mobile devices with offline caching.
 *   **Nifty 500 Universe**: Scans the entire broad market index.
 *   **Simulation Engine**: Built-in paper trading to track performance ("Novice" to "Grandmaster" levels).
 *   **Adaptive Regimes**: Switches logic between **Bullish**, **Bearish**, and **High Volatility**.
@@ -40,9 +44,9 @@ Shortlisted candidates are passed to the **Quant Expert**:
 
 ## 🛠️ Tech Stack
 
-*   **Brain (Backend)**: Python, FastAPI, Pandas, NumPy, PyTorch (RL).
-*   **Face (Frontend)**: React, TypeScript, Vite, Framer Motion, Recharts.
-*   **Data**: `yfinance` (Real-time), `ta` (Technical Analysis).
+*   **Brain (Backend)**: Python, FastAPI, WebSocket, Pandas, NumPy, PyTorch (RL).
+*   **Face (Frontend)**: React 18, TypeScript, Vite, Framer Motion, Recharts, Vitest.
+*   **Data**: `alpaca-py` (Real-time) or `yfinance` (Fallback), `ta` (Technical Analysis).
 
 ---
 
@@ -51,16 +55,32 @@ Shortlisted candidates are passed to the **Quant Expert**:
 ### 1. Install Dependencies
 ```bash
 pip install -r requirements.txt
+cd frontend && npm install
 ```
 
+### 2. Configure Data Provider (Optional)
+```bash
+cp .env.example .env
+# Edit .env: Set DATA_PROVIDER=alpaca and add your Alpaca API keys
+# Get free keys at: https://app.alpaca.markets/signup
+```
+
+
 ### 2. Run the Engine (Full Stack)
-We use a convenient start script to launch both Backend and Frontend:
 ```bash
 cd frontend
-npm install
 npm run start
 ```
 *Access the Dashboard at `http://localhost:5173`*
+
+### 3. Run Tests
+```bash
+# Backend
+python -m pytest tests/ -v
+
+# Frontend
+cd frontend && npm test
+```
 
 ---
 
@@ -72,10 +92,15 @@ npm run start
     *   `volatility.py`: Income Expert.
     *   `rl_expert.py`: PPO Agent Wrapper.
     *   `quant_expert.py`: Heston/Monte Carlo Engine.
-*   `src/api/`: FastAPI Backend.
+*   `src/api/`: FastAPI Backend + WebSocket.
 *   `frontend/`: The React Visualizer.
+    *   `src/pages/`: Dashboard, Signals, Analytics, Settings.
+    *   `src/hooks/`: useWebSocket for real-time data.
+    *   `src/services/`: Notification service.
+*   `tests/`: pytest test suites.
 *   `docs/`: Detailed architectural documentation.
 
 ---
 
 *Signal.Engine is an experimental research project. Use at your own risk.*
+

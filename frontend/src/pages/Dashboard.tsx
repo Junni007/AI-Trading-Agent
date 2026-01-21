@@ -65,7 +65,7 @@ export const Dashboard = ({ data, loading, marketMood, lastUpdated, simState, on
                             <button
                                 key={cat.id}
                                 onClick={() => setFilter(cat.id as any)}
-                                className={`relative px-5 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${filter === cat.id ? 'text-chalk' : 'text-smoke hover:text-ash'
+                                className={`relative px-5 py-2 text-sm font-medium rounded-lg cursor-pointer transition-all duration-200 ${filter === cat.id ? 'text-chalk' : 'text-smoke hover:text-ash'
                                     }`}
                             >
                                 {filter === cat.id && (

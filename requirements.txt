@@ -18,3 +18,7 @@ gudhi
 pydantic-settings
 pytest
 httpx
+websockets
+alpaca-py
+python-dotenv
+

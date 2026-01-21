@@ -1,15 +1,47 @@
-from fastapi import FastAPI, BackgroundTasks
+from fastapi import FastAPI, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 import uvicorn
 import logging
+import asyncio
+import time
+from collections import defaultdict
 from src.brain.hybrid import HybridBrain
 from src.simulation.engine import SimulationEngine
+from src.api.websocket import router as ws_router, broadcast_update
 
 # Configure Logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("API")
 
-app = FastAPI(title="Sniper Trading Agent API", version="1.0")
+# Simple Rate Limiting Middleware
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    def __init__(self, app, calls_per_minute: int = 60):
+        super().__init__(app)
+        self.calls_per_minute = calls_per_minute
+        self.requests = defaultdict(list)
+    
+    async def dispatch(self, request: Request, call_next):
+        client_ip = request.client.host if request.client else "unknown"
+        now = time.time()
+        
+        # Clean old requests
+        self.requests[client_ip] = [t for t in self.requests[client_ip] if now - t < 60]
+        
+        if len(self.requests[client_ip]) >= self.calls_per_minute:
+            from fastapi.responses import JSONResponse
+            return JSONResponse(
+                status_code=429,
+                content={"error": "Rate limit exceeded. Try again later."}
+            )
+        
+        self.requests[client_ip].append(now)
+        return await call_next(request)
+
+app = FastAPI(title="Signal.Engine API", version="2.0")
+
+# Add Rate Limiting
+app.add_middleware(RateLimitMiddleware, calls_per_minute=120)
 
 # Allow CORS for Frontend
 app.add_middleware(
@@ -19,6 +51,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount WebSocket router
+app.include_router(ws_router)
 
 # Initialize Brain & Sim Engine
 brain = HybridBrain()
@@ -56,6 +91,19 @@ def background_scan():
         LATEST_DECISIONS = decisions
         LATEST_LOGS = logs
         logger.info("✅ Brain finished thinking.")
+        
+        # Broadcast to WebSocket clients
+        try:
+            asyncio.get_event_loop().run_until_complete(
+                broadcast_update({
+                    "type": "scan_complete",
+                    "data": decisions,
+                    "simulation": sim_engine.get_portfolio(),
+                    "logs": logs
+                })
+            )
+        except Exception as ws_err:
+            logger.warning(f"WebSocket broadcast failed: {ws_err}")
     except Exception as e:
         logger.error(f"Scan failed: {e}")
     finally:

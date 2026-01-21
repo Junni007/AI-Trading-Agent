@@ -86,7 +86,7 @@ export const SimulationPanel: React.FC<SimulationPanelProps> = ({ simState, onRe
                         {/* Reset Button */}
                         <button
                             onClick={onReset}
-                            className="btn-ghost flex items-center gap-2 w-fit text-xs"
+                            className="btn-ghost flex items-center gap-2 w-fit text-xs cursor-pointer"
                         >
                             <RotateCcw size={12} />
                             Reset Simulation
