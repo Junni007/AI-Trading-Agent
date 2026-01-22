@@ -370,7 +370,19 @@ class OptimizedPPOAgent(pl.LightningModule):
 
 
 def prepare_training_data(num_tickers: int = 50):
-    """Load and prepare training data."""
+    """
+    Load and prepare training data.
+    Handles yfinance cache issues on Kaggle/Colab.
+    """
+    import yfinance as yf
+    
+    # CRITICAL: Disable yfinance cache to avoid SQLite lock on Kaggle
+    # This prevents "database is locked" errors
+    try:
+        yf.set_tz_cache_location("/tmp/yf_cache")  # Use temp dir on Kaggle
+    except Exception:
+        pass  # If it fails, yfinance will work without cache
+    
     logger.info(f"Loading training data for {num_tickers} tickers...")
     
     all_tickers = get_nifty500_tickers()[:num_tickers]
@@ -382,24 +394,44 @@ def prepare_training_data(num_tickers: int = 50):
     
     is_multi_index = isinstance(full_df.columns, pd.MultiIndex)
     
+    # Find a ticker with sufficient data
+    selected_df = None
+    selected_ticker = None
+    
     if is_multi_index:
         available = [t for t in all_tickers if t in full_df.columns.get_level_values(0)]
         if not available:
             raise ValueError("No tickers available in downloaded data.")
-        selected_ticker = available[0]
-        df = full_df[selected_ticker].copy()
-        logger.info(f"Selected ticker for RL training: {selected_ticker}")
+        
+        # Try each ticker until we find one with enough data
+        for ticker in available:
+            try:
+                df = full_df[ticker].copy()
+                df.dropna(inplace=True)
+                train_df = df[(df.index >= '2019-01-01') & (df.index <= '2022-12-31')]
+                
+                if len(train_df) >= 100:  # Minimum 100 rows
+                    selected_df = train_df
+                    selected_ticker = ticker
+                    logger.info(f"Selected ticker for RL training: {ticker} ({len(train_df)} rows)")
+                    break
+                else:
+                    logger.warning(f"Ticker {ticker} has only {len(train_df)} rows, skipping...")
+            except Exception as e:
+                logger.warning(f"Failed to process {ticker}: {e}")
+                continue
+        
+        if selected_df is None:
+            raise ValueError("No ticker has sufficient training data!")
     else:
         df = full_df.copy()
+        df.dropna(inplace=True)
+        selected_df = df[(df.index >= '2019-01-01') & (df.index <= '2022-12-31')]
+        selected_ticker = "Single ticker"
     
-    df.dropna(inplace=True)
+    logger.info(f"Training data: {len(selected_df)} rows from {selected_df.index.min()} to {selected_df.index.max()}")
     
-    # Filter to training period
-    train_df = df[(df.index >= '2019-01-01') & (df.index <= '2022-12-31')]
-    
-    logger.info(f"Training data: {len(train_df)} rows from {train_df.index.min()} to {train_df.index.max()}")
-    
-    return train_df
+    return selected_df
 
 
 def main():

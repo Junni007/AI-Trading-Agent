@@ -27,8 +27,16 @@ logger = logging.getLogger('PPOTrainer')
 def prepare_training_data(num_tickers: int = 50):
     """
     Loads historical data for a subset of Nifty 500 tickers.
-    Returns a concatenated DataFrame suitable for the TradingEnv.
+    Handles yfinance cache issues on Kaggle/Colab.
     """
+    import yfinance as yf
+    
+    # CRITICAL: Redirect yfinance cache to avoid SQLite lock on Kaggle
+    try:
+        yf.set_tz_cache_location("/tmp/yf_cache")
+    except Exception:
+        pass
+    
     logger.info(f"Loading training data for {num_tickers} tickers...")
     
     # Get tickers
@@ -41,28 +49,41 @@ def prepare_training_data(num_tickers: int = 50):
     if full_df.empty:
         raise ValueError("Failed to download any data!")
     
-    # For RL, we pick one ticker for cleaner reward signal
     is_multi_index = isinstance(full_df.columns, pd.MultiIndex)
+    selected_df = None
     
     if is_multi_index:
         available = [t for t in all_tickers if t in full_df.columns.get_level_values(0)]
         if not available:
             raise ValueError("No tickers available in downloaded data.")
-        selected_ticker = available[0]
-        df = full_df[selected_ticker].copy()
-        logger.info(f"Selected ticker for RL training: {selected_ticker}")
+        
+        # Try each ticker until we find one with enough data
+        for ticker in available:
+            try:
+                df = full_df[ticker].copy()
+                df.dropna(inplace=True)
+                train_df = df[(df.index >= '2019-01-01') & (df.index <= '2022-12-31')]
+                
+                if len(train_df) >= 100:
+                    selected_df = train_df
+                    logger.info(f"Selected ticker for RL training: {ticker} ({len(train_df)} rows)")
+                    break
+                else:
+                    logger.warning(f"Ticker {ticker} has only {len(train_df)} rows, skipping...")
+            except Exception as e:
+                logger.warning(f"Failed to process {ticker}: {e}")
+                continue
+        
+        if selected_df is None:
+            raise ValueError("No ticker has sufficient training data!")
     else:
         df = full_df.copy()
+        df.dropna(inplace=True)
+        selected_df = df[(df.index >= '2019-01-01') & (df.index <= '2022-12-31')]
     
-    # Clean
-    df.dropna(inplace=True)
+    logger.info(f"Training data: {len(selected_df)} rows")
     
-    # Filter to training period (2019-2022)
-    train_df = df[(df.index >= '2019-01-01') & (df.index <= '2022-12-31')]
-    
-    logger.info(f"Training data: {len(train_df)} rows from {train_df.index.min()} to {train_df.index.max()}")
-    
-    return train_df
+    return selected_df
 
 
 def main():

@@ -101,6 +101,22 @@ if os.path.exists('checkpoints/best_ppo.ckpt'):
 - Reduce `N_ENVS` from 64 to 32
 - Reduce `ROLLOUT_STEPS` from 256 to 128
 
+### yfinance "database is locked" Error
+This is automatically handled now! The training script redirects the yfinance cache to `/tmp/yf_cache`.
+
+If you still see this error, add this at the top of your notebook:
+```python
+import yfinance as yf
+yf.set_tz_cache_location("/tmp/yf_cache")
+```
+
+### "Not enough training data" Error
+If all tickers fail to download, the system now automatically tries the next ticker.
+If you still see this error:
+1. Check your internet connection
+2. Wait a few minutes (yfinance rate limits)
+3. Try with fewer tickers: change `NUM_TICKERS = 10` in the script
+
 ### Gymnasium Warning
 The warning "Gym has been unmaintained since 2022" is benign - we're already using Gymnasium, 
 but some dependencies still import the old gym. You can safely ignore it.
@@ -111,5 +127,6 @@ but some dependencies still import the old gym. You can safely ignore it.
 | Kaggle T4 | Standard | 6-8 hours |
 | Kaggle T4 | Optimized | 30-60 min |
 | Colab Free T4 | Optimized | 45-90 min |
+
 
 
