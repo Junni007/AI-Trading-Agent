@@ -495,6 +495,7 @@ def main():
     )
     
     # 5. Train
+    # Note: No gradient_clip_val here - we use manual optimization with manual clipping
     trainer = pl.Trainer(
         max_epochs=NUM_EPOCHS,
         accelerator='gpu',
@@ -503,7 +504,6 @@ def main():
         callbacks=[checkpoint_callback, early_stop_callback],
         enable_progress_bar=True,
         log_every_n_steps=10,
-        gradient_clip_val=0.5,
     )
     
     logger.info("Starting Optimized PPO Training...")
