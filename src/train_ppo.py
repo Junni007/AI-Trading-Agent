@@ -1,13 +1,18 @@
 """
 Signal.Engine - PPO Training Script
-Trains the TradingAgent (PPO) on historical Nifty 500 data.
+Standard training script for the TradingAgent on historical data.
+For GPU-optimized training with vectorized environments, use train_ppo_optimized.py
 """
 import os
+import warnings
 import torch
 import pandas as pd
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 import logging
+
+# Suppress gym deprecation warning (we're using gymnasium, but some deps import old gym)
+warnings.filterwarnings('ignore', message='.*Gym has been unmaintained.*')
 
 from src.data_loader import MVPDataLoader
 from src.env import TradingEnv
@@ -17,6 +22,7 @@ from src.ticker_utils import get_nifty500_tickers
 # Configure Logger
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger('PPOTrainer')
+
 
 def prepare_training_data(num_tickers: int = 50):
     """
@@ -35,14 +41,10 @@ def prepare_training_data(num_tickers: int = 50):
     if full_df.empty:
         raise ValueError("Failed to download any data!")
     
-    # For RL, we typically train on a single combined "market" or pick one ticker.
-    # Let's pick the first available ticker as a demo.
-    # A more advanced version would train across all tickers (multi-env).
-    
+    # For RL, we pick one ticker for cleaner reward signal
     is_multi_index = isinstance(full_df.columns, pd.MultiIndex)
     
     if is_multi_index:
-        # Pick first available ticker
         available = [t for t in all_tickers if t in full_df.columns.get_level_values(0)]
         if not available:
             raise ValueError("No tickers available in downloaded data.")
@@ -62,13 +64,14 @@ def prepare_training_data(num_tickers: int = 50):
     
     return train_df
 
+
 def main():
-    # Hyperparameters - Optimized for better learning
-    NUM_TICKERS = 20  # Increased for more diverse training data
-    NUM_EPOCHS = 200  # Reduced epochs, better rollout quality instead
+    # Hyperparameters
+    NUM_TICKERS = 20
+    NUM_EPOCHS = 100
+    ROLLOUT_STEPS = 512  # Steps per rollout
     
     # 1. Prepare Data
-    import pandas as pd
     train_df = prepare_training_data(NUM_TICKERS)
     
     if len(train_df) < 100:
@@ -77,9 +80,24 @@ def main():
     
     # 2. Create Environment
     env = TradingEnv(train_df, initial_balance=10000, window_size=50)
+    logger.info(f"Environment created. Observation space: {env.observation_space.shape}")
     
-    # 3. Create Agent - Tuned hyperparameters
-    agent = TradingAgent(env, lr=3e-4, gamma=0.99, clip_eps=0.1)  # Higher LR, lower clip
+    # 3. Create Agent with improved hyperparameters
+    agent = TradingAgent(
+        env, 
+        lr=3e-4,
+        gamma=0.99, 
+        clip_eps=0.2,
+        gae_lambda=0.95,
+        rollout_steps=ROLLOUT_STEPS,
+        ppo_epochs=4,
+        value_coef=0.5,
+        entropy_coef=0.01
+    )
+    
+    # Log model info
+    n_params = sum(p.numel() for p in agent.model.parameters())
+    logger.info(f"Model parameters: {n_params:,}")
     
     # 4. Setup Callbacks
     checkpoint_dir = "checkpoints"
@@ -96,28 +114,31 @@ def main():
     
     early_stop_callback = EarlyStopping(
         monitor='reward',
-        patience=50,
+        patience=30,
         mode='max',
         verbose=True
     )
     
-    # 5. Train - Optimized configuration
+    # 5. Train
+    # Note: For RL, single GPU is usually better than DDP
     trainer = pl.Trainer(
         max_epochs=NUM_EPOCHS,
-        accelerator='auto',  # Uses GPU if available
-        precision='16-mixed',  # Mixed precision for ~2x speedup
+        accelerator='auto',
+        devices=1,  # Single device for RL
+        precision='16-mixed',
         callbacks=[checkpoint_callback, early_stop_callback],
         enable_progress_bar=True,
         log_every_n_steps=10,
+        gradient_clip_val=0.5,
     )
     
     logger.info("Starting PPO Training...")
+    logger.info(f"Each step: {ROLLOUT_STEPS} environment interactions, {4} PPO epochs")
     trainer.fit(agent)
     
     # 6. Save Best
     best_path = checkpoint_callback.best_model_path
     if best_path:
-        # Copy to standard name for RLExpert
         import shutil
         final_path = os.path.join(checkpoint_dir, "best_ppo.ckpt")
         shutil.copy(best_path, final_path)
@@ -125,5 +146,7 @@ def main():
     else:
         logger.warning("No best checkpoint found.")
 
+
 if __name__ == "__main__":
     main()
+

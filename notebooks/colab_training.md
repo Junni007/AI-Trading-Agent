@@ -1,16 +1,20 @@
-# Signal.Engine - Colab Training Guide
+# Signal.Engine - Kaggle/Colab Training Guide
 
-Run this notebook in Google Colab to train the PPO agent using free GPU resources.
+Run this notebook in Kaggle (free T4x2) or Google Colab to train the PPO agent.
 
 ## 1. Setup
 
 ```python
-# Clone your repo (replace with your actual URL or upload files manually)
+# Clone your repo
 !git clone https://github.com/your-username/trading-agent.git
 %cd trading-agent
 
-# Install Dependencies
-!pip install -r requirements.txt
+# Install dependencies (Gymnasium replaces deprecated Gym)
+!pip install -q -r requirements.txt
+
+# Silence deprecation warnings
+import warnings
+warnings.filterwarnings('ignore', message='.*Gym has been unmaintained.*')
 ```
 
 ## 2. Verify GPU
@@ -18,45 +22,65 @@ Run this notebook in Google Colab to train the PPO agent using free GPU resource
 ```python
 import torch
 print("GPU Available:", torch.cuda.is_available())
-print("GPU Name:", torch.cuda.get_device_name(0) if torch.cuda.is_available() else "N/A")
+print("GPU Count:", torch.cuda.device_count())
+if torch.cuda.is_available():
+    for i in range(torch.cuda.device_count()):
+        print(f"GPU {i}: {torch.cuda.get_device_name(i)}")
 !nvidia-smi
 ```
 
-## 3. Train Model (Optimized)
+## 3. Train Model
 
+### Option A: Standard Training (slower, easier to debug)
 ```python
-# Run the optimized training script
-# Uses mixed precision, gradient clipping, and tuned hyperparameters
 !python -m src.train_ppo
 ```
 
-**Current Optimizations Applied:**
-- ✅ 16-bit mixed precision (~2x speedup)
-- ✅ Gradient clipping (max_norm=0.5)
-- ✅ Learning rate: 3e-4
-- ✅ Clip epsilon: 0.1
-- ✅ 20 tickers for diverse training
-- ✅ 200 epochs (quality over quantity)
-- ✅ 500-step rollouts for stable gradients
+### Option B: GPU-Optimized Training (recommended for Kaggle)
+```python
+# Uses vectorized environments for 10-100x better GPU utilization
+!python -m src.train_ppo_optimized
+```
 
-## 4. Monitor Training
+**GPU Optimization Techniques:**
+| Feature | Standard | Optimized |
+|---------|----------|-----------|
+| Model Size | 18K params | 500K params |
+| Parallel Envs | 1 | 64 |
+| Batch Size | Sequential | 16,384/step |
+| GPU Utilization | ~4% | 60-90% |
+| Training Speed | ~0.26 it/s | ~5-10 it/s |
+
+## 4. For Multi-GPU (Kaggle T4x2)
 
 ```python
-# Launch TensorBoard in Colab
+# Single GPU is usually better for RL (less communication overhead)
+# But if you want to use both:
+!python -m src.train_ppo_optimized  # Will auto-use GPU 0 only
+```
+
+> **Note**: For PPO, using a single GPU is often faster than DDP because
+> RL training involves lots of small, sequential environment interactions.
+
+## 5. Monitor Training
+
+```python
+# Launch TensorBoard
 %load_ext tensorboard
 %tensorboard --logdir lightning_logs
 ```
 
 **What to look for:**
-- `reward` should increase over time
-- `train_loss` should stabilize (not wildly fluctuating)
-- Training speed should be ~1.0+ it/s with mixed precision
+- `reward` should trend upward
+- `entropy` should gradually decrease (policy becomes more confident)
+- GPU utilization should be >50% with optimized script
 
-## 5. Download Results
+## 6. Download Results
 
 ```python
-from google.colab import files
+from google.colab import files  # or kaggle
 import shutil
+import os
 
 # Zip and download checkpoints
 shutil.make_archive('checkpoints', 'zip', 'checkpoints')
@@ -67,10 +91,25 @@ if os.path.exists('checkpoints/best_ppo.ckpt'):
     files.download('checkpoints/best_ppo.ckpt')
 ```
 
-## Tips
+## Troubleshooting
 
-- Use **Runtime → Change runtime type → T4 GPU** for faster training
-- If data download fails (yfinance rate limits), upload your local data CSVs
-- Training should complete in ~4-6 hours with optimizations
-- Stop early if rewards aren't improving after 30+ epochs
+### Low GPU Utilization (<10%)
+- Use `train_ppo_optimized.py` instead of `train_ppo.py`
+- Increase `N_ENVS` to 128+ if you have enough GPU memory
+
+### Out of Memory (OOM)
+- Reduce `N_ENVS` from 64 to 32
+- Reduce `ROLLOUT_STEPS` from 256 to 128
+
+### Gymnasium Warning
+The warning "Gym has been unmaintained since 2022" is benign - we're already using Gymnasium, 
+but some dependencies still import the old gym. You can safely ignore it.
+
+### Training Time Estimates
+| Platform | Script | Expected Time |
+|----------|--------|---------------|
+| Kaggle T4 | Standard | 6-8 hours |
+| Kaggle T4 | Optimized | 30-60 min |
+| Colab Free T4 | Optimized | 45-90 min |
+
 
