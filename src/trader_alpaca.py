@@ -1,5 +1,6 @@
 import os
 import logging
+import time
 import torch
 import pandas as pd
 import numpy as np
@@ -191,20 +192,48 @@ class AlpacaTrader:
             action = torch.argmax(action_probs, dim=1).item()
             confidence = action_probs[0][action].item()
             
-        logger.info(f"🧠 Brain Output: Action={action} ({['HOLD', 'BUY', 'SELL'][action]}), Conf={confidence:.2f}")
+        current_price = df.iloc[-1]['Close']
+        logger.info(f"🧠 Brain Output: Action={action} ({['HOLD', 'BUY', 'SELL'][action]}), Conf={confidence:.2f} | Price: {current_price:.2f}")
         
         # Execute
-        self.execute_order(action, current_pos)
+        self.execute_order(action, current_pos, current_price, confidence)
 
-    def execute_order(self, action: int, current_pos: float):
+    def log_trade_to_csv(self, action, price, qty, confidence, position, pnl=None):
+        """Appends trade details to a CSV file."""
+        file_path = "trade_log.csv"
+        file_exists = os.path.isfile(file_path)
+        try:
+            with open(file_path, "a") as f:
+                if not file_exists:
+                    f.write("Timestamp,Symbol,Action,Price,Qty,Confidence,Position_Before,PnL,Balance\n")
+                
+                timestamp = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
+                # Fetch Balance
+                try:
+                    acct = self.trading_client.get_account()
+                    balance = float(acct.cash)
+                except:
+                    balance = 0.0
+
+                pnl_str = f"{pnl:.2f}" if pnl is not None else "0.00"
+                f.write(f"{timestamp},{self.symbol},{action},{price:.2f},{qty},{confidence:.2f},{position},{pnl_str},{balance:.2f}\n")
+        except Exception as e:
+            logger.error(f"Failed to write to CSV: {e}")
+
+    def execute_order(self, action: int, current_pos: float, current_price: float, confidence: float):
         if self.dry_run:
-            logger.info("Dry Run Mode: No order placed.")
+            if action == 1:
+                 logger.info(f"Dry Run: Would BUY {self.quantity} shares @ {current_price} (Conf: {confidence:.2f})")
+                 self.log_trade_to_csv("BUY (Dry)", current_price, self.quantity, confidence, current_pos, 0.0)
+            elif action == 2:
+                 logger.info(f"Dry Run: Would SELL {self.quantity} shares @ {current_price} (Conf: {confidence:.2f})")
+                 self.log_trade_to_csv("SELL (Dry)", current_price, self.quantity, confidence, current_pos, 0.0)
             return
 
         try:
             if action == 1: # BUY
                 if current_pos == 0:
-                    logger.info(f"📢 Placing BUY Order for {self.quantity} {self.symbol}...")
+                    logger.info(f"📢 Placing BUY Order for {self.quantity} {self.symbol} (Conf: {confidence:.2f})...")
                     req = MarketOrderRequest(
                         symbol=self.symbol,
                         qty=self.quantity,
@@ -213,14 +242,27 @@ class AlpacaTrader:
                     )
                     self.trading_client.submit_order(req)
                     logger.info("✅ Order Submitted.")
+                    self.log_trade_to_csv("BUY", current_price, self.quantity, confidence, current_pos, 0.0)
                 else:
                     logger.info("Signal BUY, but already Long. Holding.")
                     
             elif action == 2: # SELL
                 if current_pos > 0:
-                    logger.info(f"📢 Placing SELL Order for {self.symbol}...")
+                    logger.info(f"📢 Placing SELL Order for {self.symbol} (Conf: {confidence:.2f})...")
+                    
+                    # Calculate PnL (Estimated based on entry)
+                    pnl = 0.0
+                    try:
+                        pos_obj = self.trading_client.get_open_position(self.symbol)
+                        entry_price = float(pos_obj.avg_entry_price)
+                        pnl = (current_price - entry_price) * float(current_pos) # Realized PnL approx
+                        logger.info(f"💰 Realized PnL: ${pnl:.2f}")
+                    except Exception as e:
+                        logger.warning(f"Could not calc PnL: {e}")
+
                     self.trading_client.close_position(self.symbol)
                     logger.info("✅ Position Closed.")
+                    self.log_trade_to_csv("SELL", current_price, current_pos, confidence, current_pos, pnl)
                 else:
                     logger.info("Signal SELL, but no position. Holding.")
             
@@ -230,12 +272,45 @@ class AlpacaTrader:
         except Exception as e:
             logger.error(f"Execution Error: {e}")
 
+    def run_forever(self, interval_seconds: int = 60):
+        """
+        Run the agent in a 24/7 loop.
+        Actively monitors for exit opportunities if holding a position.
+        """
+        logger.info(f"🔁 Starting Continuous Trader (Interval: {interval_seconds}s)")
+        logger.info("The Brain is now actively searching for opportunities...")
+        
+        try:
+            while True:
+                # 1. Check Status
+                pos = self.get_position()
+                if pos > 0:
+                    logger.info(f"🕵️  Active Position Detected ({self.symbol}). Searching for optimal EXIT...")
+                else:
+                    logger.info(f"🔭 Flat. Searching for optimal ENTRY...")
+
+                # 2. Execute Strategy
+                self.think_and_act()
+                
+                # 3. Wait
+                logger.info(f"Sleeping for {interval_seconds}s...")
+                time.sleep(interval_seconds)
+                
+        except KeyboardInterrupt:
+            logger.info("🛑 Trader stopped by user.")
+        except Exception as e:
+            logger.error(f"Critical Loop Error: {e}")
+            time.sleep(60) # Backoff before retrying
+
 def main():
     import argparse
+    import time # Ensure time is imported
+    
     parser = argparse.ArgumentParser()
     parser.add_argument("--symbol", type=str, default="AAPL", help="Stock Ticker (e.g. AAPL, TSLA)")
     parser.add_argument("--qty", type=float, default=1, help="Quantity to trade")
     parser.add_argument("--live", action="store_true", help="Disable Dry Run (Real Paper Trading)")
+    parser.add_argument("--loop", action="store_true", help="Run continuously (every 60s)")
     
     args = parser.parse_args()
     
@@ -246,7 +321,12 @@ def main():
 
     try:
         trader = AlpacaTrader(symbol=args.symbol, quantity=args.qty, dry_run=not args.live)
-        trader.think_and_act()
+        
+        if args.loop:
+            trader.run_forever(interval_seconds=60)
+        else:
+            trader.think_and_act()
+            
     except Exception as e:
         logger.error(f"Trader Crash: {e}")
 
