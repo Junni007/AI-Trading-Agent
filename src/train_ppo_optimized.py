@@ -143,7 +143,7 @@ class VectorizedTradingEnv:
         sma50 = df['Close'].rolling(window=50).mean().fillna(0).values.astype(np.float32)
         self.sma50 = torch.from_numpy(sma50).to(self.device)
         
-        self.obs_dim = len(feature_cols) 
+        self.obs_dim = len(feature_cols) + 2  # +2 for Position/Balance broadcasting 
         self.state_dim = (self.window_size, self.obs_dim)
         
     def reset(self):
@@ -166,18 +166,42 @@ class VectorizedTradingEnv:
         # 1. Get current steps for all envs
         steps = self.current_steps
         
-        # 2. Extract windows for all envs
-        # Need to gather slices efficiently. Since window size is fixed, 
-        # we can stack the views.
+    def _get_obs(self):
+        """
+        Get observations for all environments (batch).
+        Returns: (n_envs, window_size, features + 2)
+        We broadcast the current Position/Balance to every timestep in the window
+        so the LSTM knows the current context throughout the sequence.
+        """
+        # 1. Get current steps
+        steps = self.current_steps
+        
+        # 2. Extract windows
         batch_windows = []
         for i in range(self.n_envs):
             s = steps[i].item()
-            # Shape: (Window, Features)
+            # Shape: (Window, Features=5)
             window = self.features[s : s + self.window_size]
             batch_windows.append(window)
-            
-        # Stack -> (n_envs, Window, Features)
-        return torch.stack(batch_windows)
+        
+        # Stack -> (N, Window, 5)
+        windows = torch.stack(batch_windows)
+        
+        # 3. Create Context (Position, Balance)
+        # Shape: (N, 2)
+        context = torch.stack([
+            self.positions, 
+            self.balances / self.initial_balance
+        ], dim=1)
+        
+        # 4. Broadcast Context -> (N, Window, 2)
+        # Expand context to match window size
+        context_expanded = context.unsqueeze(1).expand(-1, self.window_size, -1)
+        
+        # 5. Concatenate -> (N, Window, 7)
+        obs = torch.cat([windows, context_expanded], dim=-1)
+        
+        return obs
     
     def step(self, actions):
         """
@@ -212,26 +236,26 @@ class VectorizedTradingEnv:
         self.balances = self.balances * (1 + rewards / 100)
         
         # --- Verifiable Rewards (Vectorized) ---
-        # 1. Trend Reward: +0.05 if trade aligns with SMA50
+        # 1. Trend Reward: +0.05 if WE ARE LONG and price > SMA50
+        # (State-Based Reward, not Action-Based)
         current_sma = self.sma50[self.current_steps + self.window_size]
         
         trend_rewards = torch.zeros(self.n_envs, device=self.device)
         
-        # Buy Logic
-        buy_mask = (actions == 1)
+        # Check if we are currently Long (after action update)
+        long_mask = (self.positions == 1)
+        
+        # Good Long: We are Long AND Price > SMA
         up_trend = current_prices > current_sma
-        trend_rewards = torch.where(buy_mask & up_trend, torch.tensor(0.05, device=self.device), trend_rewards)
-        trend_rewards = torch.where(buy_mask & ~up_trend, torch.tensor(-0.05, device=self.device), trend_rewards)
+        trend_rewards = torch.where(long_mask & up_trend, torch.tensor(0.05, device=self.device), trend_rewards)
         
-        # Sell Logic
-        sell_mask = (actions == 2)
-        down_trend = current_prices < current_sma
-        trend_rewards = torch.where(sell_mask & down_trend, torch.tensor(0.05, device=self.device), trend_rewards)
-        trend_rewards = torch.where(sell_mask & ~down_trend, torch.tensor(-0.05, device=self.device), trend_rewards)
+        # Bad Long: We are Long AND Price < SMA (Fighting the trend)
+        trend_rewards = torch.where(long_mask & ~up_trend, torch.tensor(-0.05, device=self.device), trend_rewards)
         
-        # Holding Cost
-        hold_mask = (actions == 0) & (self.positions > 0)
-        trend_rewards = torch.where(hold_mask, torch.tensor(-0.001, device=self.device), trend_rewards)
+        # Missed Opportunity (FOMO): Flat in Uptrend
+        # If Flat (Pos=0) and Price > SMA -> Penalty
+        flat_mask = (self.positions == 0)
+        trend_rewards = torch.where(flat_mask & up_trend, torch.tensor(-0.02, device=self.device), trend_rewards)
         
         rewards += trend_rewards
         
@@ -268,7 +292,7 @@ class OptimizedPPOAgent(pl.LightningModule):
         self.ppo_epochs = ppo_epochs
         self.ppo_epochs = ppo_epochs
         self.mini_batch_size = mini_batch_size
-        self.entropy_coef = 0.01  # Initial entropy
+        self.entropy_coef = 0.05  # Increased entropy to force exploration (SFT is too shy)
         
         self.obs_dim = env.obs_dim
         self.action_dim = 3  # Hold, Buy, Sell
@@ -536,6 +560,19 @@ def main():
         ppo_epochs=4,
         mini_batch_size=256
     )
+
+    # 4. Bootstrap with SFT Weights (Common Sense)
+    sft_path = "checkpoints_sft/final_sft_model.pth"
+    if os.path.exists(sft_path):
+        logger.info(f"🧠 Loading SFT Weights from {sft_path}...")
+        try:
+            state_dict = torch.load(sft_path)
+            agent.model.load_state_dict(state_dict)
+            logger.info("✅ SFT Weights Loaded! Agent starting with common sense.")
+        except Exception as e:
+            logger.error(f"Failed to load SFT weights: {e}")
+    else:
+        logger.warning("⚠️ No SFT weights found. Agent starting from scratch (Random).")
     
     # Count parameters
     n_params = sum(p.numel() for p in agent.model.parameters())

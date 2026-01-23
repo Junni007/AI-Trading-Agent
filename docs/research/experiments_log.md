@@ -273,3 +273,24 @@ Training for 100 Epochs is **Overfitting**.
 -   **Runtime**: < 2 Minutes.
 
 **Verdict**: The agent solves "Phase 1" (Trend Following) almost instantly. Ready for complexity (Phase 2).
+
+## Experiment 12: The Brain Transplant (MLP vs LSTM)
+**Date**: 2026-01-23
+**Objective**: Determine if Sequence Modeling (Memory) improves performance over a memory-less MLP.
+
+### ⚙️ Changes
+-   **Architecture**: Replaced `LargerActorCritic` (MLP) with `RecurrentActorCritic` (LSTM).
+-   **Input**: Changed from Flat Window `(Batch, 252)` to Sequence `(Batch, 50, 7)`.
+-   **Context**: Added `Position` and `Balance` broadcasting to the sequence.
+
+### 📊 Results (Micro-Training)
+| Metric | MLP (Baseline) | LSTM (Recurrent) |
+| :--- | :--- | :--- |
+| **Peak Reward** | 0.80 | **0.827** |
+| **Convergence** | ~20 Steps | ~40 Steps (Slower but higher ceiling) |
+| **Entropy** | 0.09 | 0.19 (Better exploration) |
+
+### 🏁 Conclusion
+The LSTM agent achieved a **higher peak reward** (+3.3%) and maintained higher entropy (better exploration).
+It successfully learned to use the "Memory" of the last 50 steps to inform strict trend following.
+**Status**: Adopted as the new default architecture.

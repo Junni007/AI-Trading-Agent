@@ -1,106 +1,81 @@
 # 🦅 Signal.Engine
 
-### Hybrid Algorithmic Intelligence for the Nifty 500
+### Generative Algorithmic Intelligence for the Nifty 500
 
-**Signal.Engine** is an autonomous market analysis system that moves beyond simple price prediction. Instead of asking "Where will the price go?", it asks **"What is the current Regime?"** and adapts its strategy accordingly.
+**Signal.Engine** is an autonomous market analysis system that moves beyond simple price prediction. It uses **Generative AI (Sequence Modeling)** to understand market context and **Reinforcement Learning (PPO)** to execute precision trades.
 
-It combines **Heuristic Experts**, **Deep Reinforcement Learning (PPO)**, and **Quantitative Risk Modeling (Monte Carlo)** into a unified "Brain" that scans the market in real-time.
-
----
-
-## 🧠 The "Funnel" Architecture
-
-The system operates like a funnel, processing thousands of data points to find the few actionable opportunities.
-
-### 1. Level 1: The Scanners (Fast)
-The **Hybrid Brain** aggregates votes from three distinct experts to shortlist candidates:
-*   **🎯 Sniper Expert**: Detects Intraday Momentum (VWAP Cross + Volume Spikes).
-*   **🛡️ Income Expert**: Analyzes Volatility Regimes (IV Rank) to identify neutral/credit-spread setups.
-*   **🤖 RL Expert (PPO)**: A Deep Neural Network trained to spot non-linear patterns.
-
-### 2. Level 2: The Validator (Deep)
-Shortlisted candidates are passed to the **Quant Expert**:
-*   **🧪 Monte Carlo Simulation**: Runs **5,000 paths** using the **Heston Stochastic Volatility** model with **Jump Diffusion**.
-*   **Risk Scoring**: Calculates Win Probability and Expected Value (EV).
-*   **Final Decision**: If the Math agrees with the Signal, the confidence is boosted.
+It combines **Heuristic Experts**, **Deep Learning (LSTM + PPO)**, and **Quantitative Risk Modeling** into a unified "Brain" that trades live via Alpaca.
 
 ---
 
-## ✨ Features (v2.5)
+## 🧠 The "v3.0" Architecture (Generative Agent)
 
-*   **Real-Time Dashboard**: A futuristic, distraction-free UI built with React & Tailwind.
-    *   **"Void" Aesthetic**: Deep dark mode with holographic accents.
-    *   **Live Sparklines**: Visual price history for every signal.
-    *   **Signal Badges**: visual indicators for "AI" approval and "Monte Carlo" win rates.
-*   **🔌 WebSocket Integration**: Real-time updates without polling.
-*   **📊 Analytics Dashboard**: Equity curves, return distribution, win/loss ratios, and risk metrics.
-*   **🔔 Alert System**: Browser notifications for high-confidence signals.
-*   **📱 PWA Support**: Install as app on mobile devices with offline caching.
-*   **Nifty 500 Universe**: Scans the entire broad market index.
-*   **Simulation Engine**: Built-in paper trading to track performance ("Novice" to "Grandmaster" levels).
-*   **Adaptive Regimes**: Switches logic between **Bullish**, **Bearish**, and **High Volatility**.
+The system has evolved from a simple scanner to a reasoning agent:
 
----
+### 1. The Brain (Deep Learning)
+*   **Sequence Modeling (LSTM)**: Processes the last 50 candles as a time-series sequence (not a snapshot).
+*   **Supervised Fine-Tuning (SFT)**: Pre-trained on a "Golden Dataset" of perfect hindsight trades (ZigZag labeled) to learn simple "Common Sense" (77% Accuracy).
+*   **RL Fine-Tuning (PPO)**: Fine-tuned in a vectorized GPU environment to learn risk management and complex trend following.
 
-## 🛠️ Tech Stack
-
-*   **Brain (Backend)**: Python, FastAPI, WebSocket, Pandas, NumPy, PyTorch (RL).
-*   **Face (Frontend)**: React 18, TypeScript, Vite, Framer Motion, Recharts, Vitest.
-*   **Data**: `alpaca-py` (Real-time) or `yfinance` (Fallback), `ta` (Technical Analysis).
+### 2. The Deployment (Live Trading)
+*   **Alpaca Integration**: Connects directly to the Alpaca Paper Trading API.
+*   **Real-Time Execution**: Fetches live data, processes features, and executes Buy/Sell/Hold orders autonomously.
 
 ---
 
-## 🚀 Quick Start
+## 📚 Documentation
+*   **[Project Manual](docs/PROJECT_MANUAL.md)**: Detailed guide on setup, architecture, and modules.
+*   **[Architecture Roadmap](docs/ARCHITECTURE_ROADMAP.md)**: The evolution path (Phase 1 to Phase 8).
+*   **[Research Logs](docs/research/experiments_log.md)**: History of training experiments (MLP vs LSTM, Reward Shaping).
+
+---
+
+## 🚀 Quick Start (Deployment)
 
 ### 1. Install Dependencies
 ```bash
 pip install -r requirements.txt
-cd frontend && npm install
 ```
 
-### 2. Configure Data Provider (Optional)
-```bash
-cp .env.example .env
-# Edit .env: Set DATA_PROVIDER=alpaca and add your Alpaca API keys
-# Get free keys at: https://app.alpaca.markets/signup
+### 2. Configure Environment
+Create a `.env` file with your Alpaca API credentials:
+```env
+APCA_API_KEY_ID="your_key"
+APCA_API_SECRET_KEY="your_secret"
+APCA_API_BASE_URL="https://paper-api.alpaca.markets"
 ```
 
-
-### 2. Run the Engine (Full Stack)
+### 3. Run the Trader (Dry Run)
+Verify the Brain is working without placing real orders:
 ```bash
-cd frontend
-npm run start
+python -m src.trader_alpaca --symbol RELIANCE.NS --qty 1
 ```
-*Access the Dashboard at `http://localhost:5173`*
 
-### 3. Run Tests
+### 4. Go Live (Paper Trading)
+Allow the agent to execute trades:
 ```bash
-# Backend
-python -m pytest tests/ -v
-
-# Frontend
-cd frontend && npm test
+python -m src.trader_alpaca --symbol RELIANCE.NS --qty 1 --live
 ```
 
 ---
 
 ## 📂 Project Structure
 
-*   `src/brain/`: The core logic.
-    *   `hybrid.py`: The Meta-Controller (The Funnel).
-    *   `intraday.py`: Sniper Expert.
-    *   `volatility.py`: Income Expert.
-    *   `rl_expert.py`: PPO Agent Wrapper.
-    *   `quant_expert.py`: Heston/Monte Carlo Engine.
-*   `src/api/`: FastAPI Backend + WebSocket.
-*   `frontend/`: The React Visualizer.
-    *   `src/pages/`: Dashboard, Signals, Analytics, Settings.
-    *   `src/hooks/`: useWebSocket for real-time data.
-    *   `src/services/`: Notification service.
-*   `tests/`: pytest test suites.
-*   `docs/`: Detailed architectural documentation.
+*   `src/`
+    *   **Agent Logic**:
+        *   `train_ppo_optimized.py`: The main RL Training Loop (Vectorized PPO + LSTM).
+        *   `train_sft.py`: The Teacher (Supervised Fine-Tuning).
+        *   `sft_dataset.py`: The Data Loader for Golden Labels.
+        *   `data_labeler.py`: The Hindsight Labeler (ZigZag).
+    *   **Deployment**:
+        *   `trader_alpaca.py`: **Live Trading Script**.
+    *   **Core**:
+        *   `data_loader.py`: Nifty 500 Data Fetcher.
+*   `frontend/`: React Dashboard (Archives/Visualizer).
+*   `checkpoints/`: RL Model Weights (`best_ppo.ckpt`).
+*   `checkpoints_sft/`: SFT Model Weights (`final_sft_model.pth`).
+*   `docs/`: detailed documentation.
 
 ---
 
 *Signal.Engine is an experimental research project. Use at your own risk.*
-
