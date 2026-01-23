@@ -112,24 +112,31 @@ class TradingEnv(gym.Env):
         trade_value = prev_net_worth * trade_fraction
         unit = trade_value / current_price if current_price > 0 else 0
         
+        action_type = "HOLD"
         if action == 1:  # Buy
             cost = current_price * unit
             if self.balance >= cost:
                 self.balance -= cost
                 self.position += unit
+                action_type = "BUY"
         elif action == 2:  # Sell
             sell_amount = min(unit, self.position)  # Can't sell more than we have
             if sell_amount > 0:
                 self.balance += current_price * sell_amount
                 self.position -= sell_amount
+                action_type = "SELL"
                  
-        # Calculate Reward - SCALED for better learning signal
+        # Calculate Reward - Component Based (Verifiable)
         current_net_worth = self.balance + self.position * current_price
         self.net_worth_history.append(current_net_worth)
         
-        # Reward = Percentage change * 100 for meaningful gradient signal
-        pct_change = (current_net_worth - prev_net_worth) / prev_net_worth if prev_net_worth > 0 else 0
-        reward = pct_change * 100  # Scale up significantly
+        reward = self._calculate_verifiable_reward(
+            action_type, 
+            prev_net_worth, 
+            current_net_worth, 
+            current_price, 
+            self.current_step
+        )
         
         # Advance step
         self.current_step += 1
@@ -138,9 +145,58 @@ class TradingEnv(gym.Env):
         truncated = False
         
         obs = self._next_observation() if not terminated else np.zeros(self.obs_shape, dtype=np.float32)
-        info = {"net_worth": current_net_worth, "price": current_price}
+        info = {
+            "net_worth": current_net_worth, 
+            "price": current_price,
+            "reward": reward
+        }
         
         return obs, reward, terminated, truncated, info
+
+    def _calculate_verifiable_reward(self, action_type, prev_worth, cur_worth, price, step_idx):
+        """
+        Component-based reward function (The 'Verifiable' in Phase 1).
+        Components:
+        1. PnL Reward (Outcome)
+        2. Trend Reward (Reasoning)
+        3. Holding Cost (Efficiency)
+        """
+        # 1. PnL Component (The Outcome)
+        pct_change = (cur_worth - prev_worth) / prev_worth if prev_worth > 0 else 0
+        r_pnl = pct_change * 100.0
+        
+        # 2. Trend Component (The Reasoning)
+        # Simple Logic: Reward buying above SMA50, Selling below SMA50
+        r_trend = 0.0
+        
+        # Lookback for simple trend (last 50 steps roughly)
+        if step_idx > 50:
+            if isinstance(self.df, pd.DataFrame) and 'Close' in self.df.columns:
+                past_prices = self.df['Close'].iloc[step_idx-50:step_idx]
+            else:
+                 past_prices = self.df.iloc[step_idx-50:step_idx] if hasattr(self.df, 'iloc') else []
+            
+            if len(past_prices) > 0:
+                sma50 = past_prices.mean()
+                
+                if action_type == "BUY":
+                    # Good to buy if price > SMA (Uptrend)
+                    if price > sma50:
+                        r_trend = 0.05
+                    else:
+                        r_trend = -0.05 # Counter-trend penalty
+                elif action_type == "SELL":
+                    # Good to sell if price < SMA (Downtrend)
+                    if price < sma50:
+                        r_trend = 0.05
+                    else:
+                        r_trend = -0.05
+        
+        # 3. Holding Cost (Efficiency)
+        r_hold = -0.001 if self.position > 0 and action_type == "HOLD" else 0.0
+        
+        total_reward = r_pnl + r_trend + r_hold
+        return total_reward
 
     def render(self, mode='human', close=False):
         current_net_worth = self.balance + self.position * self.df.iloc[self.current_step]['Close']

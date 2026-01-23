@@ -132,6 +132,10 @@ class VectorizedTradingEnv:
         self.features = torch.from_numpy(features).to(self.device)
         self.prices = torch.from_numpy(df['Close'].values.astype(np.float32)).to(self.device)
         
+        # SMA 50 for Trend Reward
+        sma50 = df['Close'].rolling(window=50).mean().fillna(0).values.astype(np.float32)
+        self.sma50 = torch.from_numpy(sma50).to(self.device)
+        
         self.obs_dim = len(feature_cols) * self.window_size + 2  # +2 for position and balance ratio
         
     def reset(self):
@@ -184,7 +188,32 @@ class VectorizedTradingEnv:
         rewards = torch.where(hold_long, returns * 10, rewards)
         
         # Update balances
+        # Update balances
         self.balances = self.balances * (1 + rewards / 100)
+        
+        # --- Verifiable Rewards (Vectorized) ---
+        # 1. Trend Reward: +0.05 if trade aligns with SMA50
+        current_sma = self.sma50[self.current_steps + self.window_size]
+        
+        trend_rewards = torch.zeros(self.n_envs, device=self.device)
+        
+        # Buy Logic
+        buy_mask = (actions == 1)
+        up_trend = current_prices > current_sma
+        trend_rewards = torch.where(buy_mask & up_trend, torch.tensor(0.05, device=self.device), trend_rewards)
+        trend_rewards = torch.where(buy_mask & ~up_trend, torch.tensor(-0.05, device=self.device), trend_rewards)
+        
+        # Sell Logic
+        sell_mask = (actions == 2)
+        down_trend = current_prices < current_sma
+        trend_rewards = torch.where(sell_mask & down_trend, torch.tensor(0.05, device=self.device), trend_rewards)
+        trend_rewards = torch.where(sell_mask & ~down_trend, torch.tensor(-0.05, device=self.device), trend_rewards)
+        
+        # Holding Cost
+        hold_mask = (actions == 0) & (self.positions > 0)
+        trend_rewards = torch.where(hold_mask, torch.tensor(-0.001, device=self.device), trend_rewards)
+        
+        rewards += trend_rewards
         
         # Step forward
         self.current_steps += 1
@@ -217,7 +246,9 @@ class OptimizedPPOAgent(pl.LightningModule):
         self.clip_eps = clip_eps
         self.rollout_steps = rollout_steps
         self.ppo_epochs = ppo_epochs
+        self.ppo_epochs = ppo_epochs
         self.mini_batch_size = mini_batch_size
+        self.entropy_coef = 0.01  # Initial entropy
         
         self.obs_dim = env.obs_dim
         self.action_dim = 3  # Hold, Buy, Sell
@@ -229,6 +260,12 @@ class OptimizedPPOAgent(pl.LightningModule):
         
     def forward(self, x):
         return self.model(x)
+    
+    def on_train_epoch_start(self):
+        """Vectorized Entropy Decay"""
+        decay = 0.95
+        self.entropy_coef = max(0.001, 0.01 * (decay ** self.current_epoch))
+        self.log("entropy_coef", self.entropy_coef, prog_bar=True)
     
     def training_step(self, batch, batch_idx):
         optimizer = self.optimizers()
@@ -336,7 +373,8 @@ class OptimizedPPOAgent(pl.LightningModule):
                 actor_loss = -torch.min(surr1, surr2).mean()
                 critic_loss = F.mse_loss(new_values.squeeze(-1), mb_returns)
                 
-                loss = actor_loss + 0.5 * critic_loss - 0.01 * entropy
+                
+                loss = actor_loss + 0.5 * critic_loss - self.entropy_coef * entropy
                 
                 optimizer.zero_grad()
                 self.manual_backward(loss)
@@ -498,8 +536,8 @@ def main():
     # Note: No gradient_clip_val here - we use manual optimization with manual clipping
     trainer = pl.Trainer(
         max_epochs=NUM_EPOCHS,
-        accelerator='gpu',
-        devices=1,  # Single GPU is usually better for RL
+        accelerator='auto',
+        devices=1,  # Auto-select device
         precision='16-mixed',
         callbacks=[checkpoint_callback, early_stop_callback],
         enable_progress_bar=True,

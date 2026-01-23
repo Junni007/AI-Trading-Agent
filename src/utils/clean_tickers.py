@@ -13,7 +13,8 @@ delisted_tickers = [
 ]
 
 # Read CSV
-csv_path = 'src/nifty500.csv'
+# Relative path from src/utils/ to src/nifty500.csv
+csv_path = '../nifty500.csv'
 try:
     df = pd.read_csv(csv_path)
     print(f"Original Count: {len(df)}")

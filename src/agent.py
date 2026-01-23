@@ -109,6 +109,19 @@ class TradingAgent(pl.LightningModule):
         
         # Save hyperparameters (except env which isn't serializable)
         self.save_hyperparameters(ignore=['env'])
+    
+    def on_train_epoch_start(self):
+        """
+        Entropy Scheduling: Decay entropy coefficient linearly/exponentially.
+        Start high (Exploration) -> End low (Exploitation).
+        """
+        # Decay factor per epoch (e.g., 0.95)
+        decay = 0.95
+        new_entropy = max(0.001, self.hparams.entropy_coef * (decay ** self.current_epoch))
+        
+        # Update the active entropy coef (not the hparams one, dev convention)
+        self.entropy_coef = new_entropy
+        self.log("entropy_coef", self.entropy_coef, prog_bar=True)
         
     def forward(self, x):
         return self.model(x)
