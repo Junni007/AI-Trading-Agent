@@ -4,14 +4,15 @@ This document outlines the strategic evolution of the Signal.Engine trading agen
 
 ---
 
-## Phase 1: Verifiable Rewards (Current)
+## Phase 1: Verifiable Rewards (Verified ✅)
 **Goal:** Fix the "Blind Gambler" problem where the agent learns to overfit noise.
+**Status:** **COMPLETE** (2026-01-23)
+**Key Discovery:** "Micro-Training" (1 Epoch, 50 Iterations) is sufficient to master Trend Following logic. 100 Epochs is overfitting.
 **Mechanism:** 
-- **Component-Based Reward Function:** instead of just $ PnL $, the reward is $ R = R_{trend} + R_{risk} + R_{pnl} $.
-    - **Trend Reward:** Positive if long/short aligns with dominant market trend (SMA/EMA).
-    - **Risk Reward:** Penalty for high volatility entry or poor risk-reward ratio.
-- **Entropy Scheduling:** Force exploration early in training, linearly decaying to exploitation.
-- **Self-Critique (Planned):** Auxiliary head to predict "regret".
+- **Component-Based Reward Function:** $ R = R_{trend} + R_{risk} + R_{pnl} $.
+    - **Trend Reward:** Positive if long/short aligns with SMA50.
+- **Entropy Scheduling:** Linear decay (0.68 -> 0.09) forces rapid convergence.
+- **Optimization:** Micro-Mode + Graph Compilation (disabled on Windows) = < 2 min training.
 
 ## Phase 2: Sequence Modeling
 **Goal:** Capture long-term market dependencies and context.

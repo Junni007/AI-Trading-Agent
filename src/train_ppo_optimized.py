@@ -29,56 +29,59 @@ logger = logging.getLogger('PPOTrainer')
 torch.set_float32_matmul_precision('medium')
 
 
-class LargerActorCritic(nn.Module):
+class RecurrentActorCritic(nn.Module):
     """
-    Larger model for better GPU utilization.
-    Original: 18K params -> New: ~500K params
+    LSTM-based Actor-Critic for Sequence Modeling.
+    Input: (Batch, Sequence_Length, Features)
     """
-    def __init__(self, input_dim, output_dim, hidden_dim=512):
+    def __init__(self, input_dim, output_dim, hidden_dim=256, num_layers=1):
         super().__init__()
         
-        # Deeper network with residual connections
-        self.fc1 = nn.Linear(input_dim, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
-        self.fc3 = nn.Linear(hidden_dim, hidden_dim)
-        self.fc4 = nn.Linear(hidden_dim, hidden_dim // 2)
+        self.num_layers = num_layers
+        self.hidden_dim = hidden_dim
         
-        # Layer normalization for stability
-        self.ln1 = nn.LayerNorm(hidden_dim)
-        self.ln2 = nn.LayerNorm(hidden_dim)
-        self.ln3 = nn.LayerNorm(hidden_dim)
+        # LSTM Layer
+        self.lstm = nn.LSTM(
+            input_size=input_dim,
+            hidden_size=hidden_dim,
+            num_layers=num_layers,
+            batch_first=True
+        )
         
-        # Actor head
+        # Actor Head
         self.actor = nn.Sequential(
-            nn.Linear(hidden_dim // 2, hidden_dim // 4),
+            nn.Linear(hidden_dim, hidden_dim // 2),
             nn.ReLU(),
-            nn.Linear(hidden_dim // 4, output_dim)
+            nn.Linear(hidden_dim // 2, output_dim)
         )
         
-        # Critic head
+        # Critic Head
         self.critic = nn.Sequential(
-            nn.Linear(hidden_dim // 2, hidden_dim // 4),
+            nn.Linear(hidden_dim, hidden_dim // 2),
             nn.ReLU(),
-            nn.Linear(hidden_dim // 4, 1)
+            nn.Linear(hidden_dim // 2, 1)
         )
         
-    def forward(self, x):
-        # Feature extraction with residual connections
-        x = F.relu(self.ln1(self.fc1(x)))
-        identity = x
-        x = F.relu(self.ln2(self.fc2(x)))
-        x = x + identity  # Residual
-        identity = x
-        x = F.relu(self.ln3(self.fc3(x)))
-        x = x + identity  # Residual
-        x = F.relu(self.fc4(x))
+    def forward(self, x, hidden=None):
+        # x shape: (Batch, Seq_Len, Features)
         
-        # Outputs
-        action_logits = self.actor(x)
+        # Pass through LSTM
+        # out shape: (Batch, Seq_Len, Hidden)
+        self.lstm.flatten_parameters()
+        out, new_hidden = self.lstm(x, hidden)
+        
+        # Extract last time-step for Actor/Critic
+        # (We make decisions based on the most recent context)
+        last_out = out[:, -1, :]
+        
+        # Actor: Action probabilities
+        action_logits = self.actor(last_out)
         action_probs = F.softmax(action_logits, dim=-1)
-        state_value = self.critic(x)
         
-        return action_probs, state_value
+        # Critic: Value estimation
+        state_value = self.critic(last_out)
+        
+        return action_probs, state_value, new_hidden
 
 
 class VectorizedTradingEnv:
@@ -140,7 +143,8 @@ class VectorizedTradingEnv:
         sma50 = df['Close'].rolling(window=50).mean().fillna(0).values.astype(np.float32)
         self.sma50 = torch.from_numpy(sma50).to(self.device)
         
-        self.obs_dim = len(feature_cols) * self.window_size + 2  # +2 for position and balance ratio
+        self.obs_dim = len(feature_cols) 
+        self.state_dim = (self.window_size, self.obs_dim)
         
     def reset(self):
         """Reset all environments."""
@@ -152,16 +156,28 @@ class VectorizedTradingEnv:
         self.balances = torch.full((self.n_envs,), self.initial_balance, device=self.device)
         return self._get_obs()
     
+        return torch.stack(batch_obs)
+    
     def _get_obs(self):
         """Get observations for all environments (batch)."""
-        batch_obs = []
+        # Optimized tensor slicing instead of loop
+        # Returns: (n_envs, window_size, features)
+        
+        # 1. Get current steps for all envs
+        steps = self.current_steps
+        
+        # 2. Extract windows for all envs
+        # Need to gather slices efficiently. Since window size is fixed, 
+        # we can stack the views.
+        batch_windows = []
         for i in range(self.n_envs):
-            step = self.current_steps[i].item()
-            window = self.features[step:step + self.window_size].flatten()
-            pos_balance = torch.tensor([self.positions[i], self.balances[i] / self.initial_balance], device=self.device)
-            obs = torch.cat([window, pos_balance])
-            batch_obs.append(obs)
-        return torch.stack(batch_obs)
+            s = steps[i].item()
+            # Shape: (Window, Features)
+            window = self.features[s : s + self.window_size]
+            batch_windows.append(window)
+            
+        # Stack -> (n_envs, Window, Features)
+        return torch.stack(batch_windows)
     
     def step(self, actions):
         """
@@ -257,16 +273,17 @@ class OptimizedPPOAgent(pl.LightningModule):
         self.obs_dim = env.obs_dim
         self.action_dim = 3  # Hold, Buy, Sell
         
-        self.model = LargerActorCritic(self.obs_dim, self.action_dim)
+        self.model = RecurrentActorCritic(self.obs_dim, self.action_dim)
         
         # Free Speedup: Compile model for fused kernels (PyTorch 2.0+)
-        self.model = torch.compile(self.model)
+        # Disabled for Windows (Triton not supported out-of-the-box)
+        # self.model = torch.compile(self.model)
         
         self.automatic_optimization = False
         self.save_hyperparameters(ignore=['env'])
         
-    def forward(self, x):
-        return self.model(x)
+    def forward(self, x, hidden=None):
+        return self.model(x, hidden)
     
     def on_train_epoch_start(self):
         """Vectorized Entropy Decay"""
@@ -289,7 +306,10 @@ class OptimizedPPOAgent(pl.LightningModule):
         
         for _ in range(self.rollout_steps):
             with torch.no_grad():
-                probs, value = self.model(state)
+                # Add batch dimension for sequence length=1 if needed, 
+                # but here we pass the full window History as the "Sequence"
+                # Input to Model: (n_envs, window_size, features)
+                probs, value, _ = self.model(state)
             
             dist = Categorical(probs)
             action = dist.sample()
@@ -316,7 +336,7 @@ class OptimizedPPOAgent(pl.LightningModule):
         
         # 2. Compute advantages using GAE
         with torch.no_grad():
-            _, next_value = self.model(state)
+            _, next_value, _ = self.model(state)
             next_value = next_value.squeeze(-1)
         
         advantages = torch.zeros_like(rewards)
@@ -336,8 +356,9 @@ class OptimizedPPOAgent(pl.LightningModule):
         
         # Flatten for mini-batch updates
         # [T, N, ...] -> [T*N, ...]
+        # [T, N, Window, F] -> [T*N, Window, F]
         T, N = states.shape[0], states.shape[1]
-        flat_states = states.view(T * N, -1)
+        flat_states = states.view(T * N, self.env.window_size, self.env.obs_dim)
         flat_actions = actions.view(T * N)
         flat_old_log_probs = old_log_probs.view(T * N)
         flat_advantages = advantages.view(T * N)
@@ -367,7 +388,7 @@ class OptimizedPPOAgent(pl.LightningModule):
                 mb_returns = flat_returns[mb_indices]
                 
                 # Forward pass
-                probs, new_values = self.model(mb_states)
+                probs, new_values, _ = self.model(mb_states)
                 dist = Categorical(probs)
                 new_log_probs = dist.log_prob(mb_actions)
                 entropy = dist.entropy().mean()
