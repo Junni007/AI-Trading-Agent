@@ -259,6 +259,9 @@ class OptimizedPPOAgent(pl.LightningModule):
         
         self.model = LargerActorCritic(self.obs_dim, self.action_dim)
         
+        # Free Speedup: Compile model for fused kernels (PyTorch 2.0+)
+        self.model = torch.compile(self.model)
+        
         self.automatic_optimization = False
         self.save_hyperparameters(ignore=['env'])
         
@@ -404,8 +407,9 @@ class OptimizedPPOAgent(pl.LightningModule):
     
     def train_dataloader(self):
         # Dummy dataloader - actual data comes from vectorized env
+        # Reduced to 50 steps per epoch for fast student feedback (800k total interactions)
         return torch.utils.data.DataLoader(
-            torch.zeros(500),  # 500 training steps per epoch
+            torch.zeros(50), 
             batch_size=1,
             num_workers=0  # No workers needed, everything is on GPU
         )
@@ -479,8 +483,8 @@ def prepare_training_data(num_tickers: int = 50):
 def main():
     # Hyperparameters - Optimized for GPU
     NUM_TICKERS = 20
-    NUM_EPOCHS = 100  # Fewer epochs but more data per epoch
-    N_ENVS = 64  # Run 64 environments in parallel
+    NUM_EPOCHS = 1  # Micro-Mode: Single pass
+    N_ENVS = 256  # Run 64 environments in parallel
     ROLLOUT_STEPS = 256  # Steps per rollout
     
     # 1. Prepare Data

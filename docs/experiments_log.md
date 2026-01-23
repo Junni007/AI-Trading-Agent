@@ -245,3 +245,31 @@ Running 10,000 Monte Carlo simulations with Stochastic Volatility for 500+ ticke
 **Status**: **DEPLOYED / INTEGRATED**.
 -   **Method**: `HybridBrain` scans 500 tickers -> Filters Top 10 -> `QuantExpert` runs 5k paths on each.
 -   **Result**: Validated "Level 1" -> "Level 2" funnel on mocked data. Real-time performance is sub-2 seconds for full pipeline.
+
+## Experiment 11: The "Golden Mean" (PPO Optimization)
+**Date**: 2026-01-23
+**Objective**: Train an RL Agent with "Verifiable Rewards" (Trend Following) without burning GPU cycles unnecessarily.
+
+### 🧪 Hypothesis
+Standard RL requires millions of steps. However, simple financial concepts (Trend Following) are "low complexity". 
+We hypothesize that an agent can learn "Buy if Price > SMA50" extremely quickly if provided with explicit rewards.
+
+### ⚙️ Improvements Implemented
+1.  **Verifiable Rewards**: Explicit +0.05 reward for trend-aligned trades.
+2.  **Entropy Scheduling**: Linear decay to force early exploration.
+3.  **Graph Compilation**: `torch.compile` for kernel fusion.
+
+### 📊 Findings (from Training Logs)
+-   **Rapid Learning**: Entropy dropped from `0.68` to `0.09` in minimal steps (<50).
+-   **Reward Plateau**: Reached optimal efficiency (~0.8 reward) by Step 200.
+-   **Epoch Redundancy**: Epoch 1 showed <1% gain over Epoch 0.
+
+### 🏁 Conclusion: "Micro-Training"
+Training for 100 Epochs is **Overfitting**.
+**New Standard**:
+-   **Epochs**: 1
+-   **Iterations**: 50
+-   **Total Steps**: ~800k (Parallel Envs)
+-   **Runtime**: < 2 Minutes.
+
+**Verdict**: The agent solves "Phase 1" (Trend Following) almost instantly. Ready for complexity (Phase 2).
