@@ -8,7 +8,7 @@ export const Footer = () => {
                 </div>
 
                 <div className="flex gap-6 text-smoke/70">
-                    <a href="#" className="hover:text-amber transition-colors">Docs</a>
+                    <a href="https://ai-trading-agent.superdocs.cloud/" target="_blank" className="hover:text-amber transition-colors">Docs</a>
                     <a href="#" className="hover:text-amber transition-colors">Status</a>
                     <a href="#" className="hover:text-amber transition-colors">Legal</a>
                 </div>

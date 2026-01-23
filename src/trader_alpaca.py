@@ -91,14 +91,24 @@ class AlpacaTrader:
         
         # Fetch enough data to compute 20-day rolling indicators
         # Window=50, SMA=50 -> Need at least 100 bars
+        # Explicitly set start date 2 years back to ensure we get plenty of daily bars
+        start_date = datetime.now() - timedelta(days=730) 
+        
         request_params = StockBarsRequest(
             symbol_or_symbols=self.symbol,
-            timeframe=TimeFrame.Day, # Daily candles for now
-            limit=150
+            timeframe=TimeFrame.Day, 
+            start=start_date,
+            limit=200
         )
         
-        bars = self.data_client.get_stock_bars(request_params)
-        df = bars.df
+        try:
+            bars = self.data_client.get_stock_bars(request_params)
+            df = bars.df
+        except Exception as e:
+            logger.error(f"Alpaca Data Error: {e}")
+            return pd.DataFrame() # Return empty
+        
+        logger.info(f"Fetched {len(df)} bars for {self.symbol}")
         
         # Alpaca returns MultiIndex (symbol, timestamp) -> Reset
         df = df.reset_index(level=0, drop=True) 
