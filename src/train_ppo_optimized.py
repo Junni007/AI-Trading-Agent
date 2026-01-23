@@ -11,6 +11,7 @@ import pandas as pd
 import numpy as np
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
+from pytorch_lightning.loggers import CSVLogger
 from torch.distributions import Categorical
 import logging
 
@@ -534,6 +535,10 @@ def main():
     
     # 5. Train
     # Note: No gradient_clip_val here - we use manual optimization with manual clipping
+    
+    # Switch to CSVLogger to avoid Protobuf/Tensorboard version conflicts on Colab/Kaggle
+    csv_logger = CSVLogger("logs", name="ppo_training")
+    
     trainer = pl.Trainer(
         max_epochs=NUM_EPOCHS,
         accelerator='auto',
@@ -542,6 +547,7 @@ def main():
         callbacks=[checkpoint_callback, early_stop_callback],
         enable_progress_bar=True,
         log_every_n_steps=10,
+        logger=csv_logger,
     )
     
     logger.info("Starting Optimized PPO Training...")
