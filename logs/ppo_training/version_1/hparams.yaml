@@ -1,0 +1,6 @@
+clip_eps: 0.2
+gamma: 0.99
+lr: 0.0003
+mini_batch_size: 256
+ppo_epochs: 4
+rollout_steps: 256

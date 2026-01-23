@@ -25,6 +25,9 @@ from src.ticker_utils import get_nifty500_tickers
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger('PPOTrainer')
 
+# Optimization for RTX Cards (Tensor Cores)
+torch.set_float32_matmul_precision('medium')
+
 
 class LargerActorCritic(nn.Module):
     """
