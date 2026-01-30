@@ -107,9 +107,9 @@ class TradingEnv(gym.Env):
         # 1: Buy (Buy 1 share - simplified)
         # 2: Sell (Sell 1 share - simplified)
         
-        # Position sizing: Trade 10% of portfolio value for meaningful learning signal
-        trade_fraction = 0.10
-        trade_value = prev_net_worth * trade_fraction
+        # Position sizing: Volatility-Targeted (v4.0 Upgrade)
+        # Scale position size inversely with volatility for consistent risk
+        trade_value = self._calculate_vol_targeted_position(prev_net_worth, current_price, self.current_step)
         unit = trade_value / current_price if current_price > 0 else 0
         
         action_type = "HOLD"
@@ -153,6 +153,54 @@ class TradingEnv(gym.Env):
         
         return obs, reward, terminated, truncated, info
 
+    def _calculate_vol_targeted_position(self, net_worth, current_price, step_idx):
+        """
+        Volatility-Targeted Position Sizing (v4.0)
+        
+        Scales position size inversely with volatility:
+        - High volatility → Smaller positions
+        - Low volatility → Larger positions
+        
+        Target: 20% annualized portfolio volatility
+        """
+        target_vol = 0.20  # 20% annualized
+        base_allocation = 0.10  # Base 10% of portfolio
+        
+        # Calculate current stock volatility using ATR
+        if 'ATR' in self.df.columns and step_idx < len(self.df):
+            atr = float(self.df['ATR'].iloc[step_idx])
+            # ATR is already normalized by price in data_loader
+            current_vol = atr
+        else:
+            # Fallback: Simple rolling std if ATR not available
+            if step_idx > 20:
+                if isinstance(self.df, pd.DataFrame) and 'Close' in self.df.columns:
+                    recent_prices = self.df['Close'].iloc[step_idx-20:step_idx]
+                else:
+                    recent_prices = self.df.iloc[step_idx-20:step_idx] if hasattr(self.df, 'iloc') else []
+                
+                if len(recent_prices) > 0:
+                    returns = recent_prices.pct_change().dropna()
+                    current_vol = returns.std() if len(returns) > 0 else 0.02
+                else:
+                    current_vol = 0.02  # Default 2% if no data
+            else:
+                current_vol = 0.02  # Default 2% for early steps
+        
+        # Clip volatility to reasonable range (0.5% - 10%)
+        current_vol = np.clip(current_vol, 0.005, 0.10)
+        
+        # Inverse scaling: vol_scalar = target / actual
+        vol_scalar = target_vol / current_vol
+        
+        # Cap scaling at 0.5x - 2.0x for safety
+        vol_scalar = np.clip(vol_scalar, 0.5, 2.0)
+        
+        # Final position value
+        position_value = net_worth * base_allocation * vol_scalar
+        
+        return position_value
+    
     def _calculate_verifiable_reward(self, action_type, prev_worth, cur_worth, price, step_idx):
         """
         Component-based reward function (The 'Verifiable' in Phase 1).

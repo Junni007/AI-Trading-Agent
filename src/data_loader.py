@@ -298,6 +298,62 @@ class MVPDataLoader:
             'scalers': {}, # Scalers are local now, dropped.
             'test_dates': [] # Dropped for global training
         }
+    
+    def compute_cross_sectional_features(self, df_dict: Dict[str, pd.DataFrame]) -> Dict[str, pd.DataFrame]:
+        """
+        Cross-Sectional Factor Model (v4.0 Upgrade)
+        
+        For each date, rank all tickers by their technical indicators.
+        This teaches the model *relative strength* instead of absolute values.
+        
+        Example:
+            - Stock A: RSI=70, Rank=0.95 (Top 5%)
+            - Stock B: RSI=65, Rank=0.60 (Middle)
+            → Model learns to prefer A over B
+        
+        Args:
+            df_dict: Dict of {ticker: DataFrame}
+        
+        Returns:
+            Same dict with added columns: RSI_Rank, Momentum_Rank
+        """
+        logger.info(f"Computing cross-sectional ranks for {len(df_dict)} tickers...")
+        
+        # Step 1: Stack all tickers into one DataFrame
+        all_data = []
+        for ticker, df in df_dict.items():
+            if df.empty or 'RSI' not in df.columns or 'Log_Return' not in df.columns:
+                continue
+            df_copy = df[['RSI', 'Log_Return']].copy()
+            df_copy['Ticker'] = ticker
+            all_data.append(df_copy)
+        
+        if not all_data:
+            logger.warning("No data available for cross-sectional ranking.")
+            return df_dict
+        
+        combined = pd.concat(all_data)
+        
+        # Step 2: Group by date, rank within each trading day
+        # rank(pct=True) returns percentile rank (0.0 to 1.0)
+        combined['RSI_Rank'] = combined.groupby(level=0)['RSI'].rank(pct=True)
+        combined['Momentum_Rank'] = combined.groupby(level=0)['Log_Return'].rank(pct=True)
+        
+        # Step 3: Split back into original dict
+        for ticker in df_dict.keys():
+            if ticker in combined['Ticker'].values:
+                mask = combined['Ticker'] == ticker
+                ticker_ranks = combined.loc[mask, ['RSI_Rank', 'Momentum_Rank']]
+                
+                # Align by index (date)
+                df_dict[ticker] = df_dict[ticker].join(ticker_ranks, how='left')
+                
+                # Fill NaNs with 0.5 (median rank) for missing dates
+                df_dict[ticker]['RSI_Rank'].fillna(0.5, inplace=True)
+                df_dict[ticker]['Momentum_Rank'].fillna(0.5, inplace=True)
+        
+        logger.info("Cross-sectional ranking complete.")
+        return df_dict
 
 if __name__ == "__main__":
     # Test

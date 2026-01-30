@@ -1,0 +1,18 @@
+{
+    "title": "signal-engine-v4",
+    "id": "REPLACE_WITH_YOUR_KAGGLE_USERNAME/signal-engine-v4",
+    "licenses": [
+        {
+            "name": "CC0-1.0"
+        }
+    ],
+    "subtitle": "Signal.Engine v4.0 - Volatility Targeting & Factor Models",
+    "description": "Trading agent with vol-targeted position sizing and cross-sectional factor ranking. Includes 9-dim observations (RSI_Rank, Momentum_Rank) and Sharpe-aware rewards.",
+    "keywords": [
+        "trading",
+        "reinforcement-learning",
+        "ppo",
+        "finance",
+        "lstm"
+    ]
+}

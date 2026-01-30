@@ -109,7 +109,7 @@ class VectorizedTradingEnv:
         self.max_steps = len(self.features) - self.window_size - 1
         
     def _precompute_features(self):
-        """Precompute all observations as a GPU tensor."""
+        """Precompute all observations as a GPU tensor (v4.0 with Cross-Sectional Features)."""
         # Ensure required columns
         required = ['Open', 'High', 'Low', 'Close', 'Volume']
         df = self.df[required].copy()
@@ -126,24 +126,35 @@ class VectorizedTradingEnv:
         loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
         df['RSI'] = 100 - (100 / (1 + gain / (loss + 1e-8)))
         
+        # v4.0: Cross-Sectional Ranking Features
+        # Note: For single-ticker training, ranks are constant (0.5)
+        # For multi-ticker, use compute_cross_sectional_features() first
+        if 'RSI_Rank' not in df.columns:
+            df['RSI_Rank'] = 0.5  # Default to median rank
+        if 'Momentum_Rank' not in df.columns:
+            df['Momentum_Rank'] = 0.5  # Default to median rank
+        
         # Normalize
         df = df.dropna()
         
-        # Feature columns
-        feature_cols = ['Returns', 'LogReturns', 'Volatility', 'Volume_Z', 'RSI']
+        # v4.0: Extended Feature Set (7 features instead of 5)
+        feature_cols = ['Returns', 'LogReturns', 'Volatility', 'Volume_Z', 'RSI', 'RSI_Rank', 'Momentum_Rank']
         features = df[feature_cols].values.astype(np.float32)
         
-        # Normalize features
+        # Normalize features (ranks already in 0-1 range, but normalize anyway for consistency)
         features = (features - features.mean(axis=0)) / (features.std(axis=0) + 1e-8)
         
         self.features = torch.from_numpy(features).to(self.device)
         self.prices = torch.from_numpy(df['Close'].values.astype(np.float32)).to(self.device)
         
+        # Store raw returns for Sharpe calculation
+        self.returns_history = df['Returns'].values.astype(np.float32)
+        
         # SMA 50 for Trend Reward
         sma50 = df['Close'].rolling(window=50).mean().fillna(0).values.astype(np.float32)
         self.sma50 = torch.from_numpy(sma50).to(self.device)
         
-        self.obs_dim = len(feature_cols) + 2  # +2 for Position/Balance broadcasting 
+        self.obs_dim = len(feature_cols) + 2  # 7 features + 2 context = 9 total
         self.state_dim = (self.window_size, self.obs_dim)
         
     def reset(self):
@@ -180,11 +191,11 @@ class VectorizedTradingEnv:
         batch_windows = []
         for i in range(self.n_envs):
             s = steps[i].item()
-            # Shape: (Window, Features=5)
+            # v4.0: Shape: (Window, Features=7) [was 5 in v3.0]
             window = self.features[s : s + self.window_size]
             batch_windows.append(window)
         
-        # Stack -> (N, Window, 5)
+        # Stack -> (N, Window, 7)
         windows = torch.stack(batch_windows)
         
         # 3. Create Context (Position, Balance)
@@ -198,7 +209,7 @@ class VectorizedTradingEnv:
         # Expand context to match window size
         context_expanded = context.unsqueeze(1).expand(-1, self.window_size, -1)
         
-        # 5. Concatenate -> (N, Window, 7)
+        # 5. Concatenate -> (N, Window, 9) [v4.0: 7 features + 2 context]
         obs = torch.cat([windows, context_expanded], dim=-1)
         
         return obs
@@ -259,6 +270,23 @@ class VectorizedTradingEnv:
         
         rewards += trend_rewards
         
+        # v4.0: Sharpe Ratio Bonus (Risk-Adjusted Performance)
+        # Calculate rolling Sharpe over last 20 steps
+        sharpe_bonus = torch.zeros(self.n_envs, device=self.device)
+        for i in range(self.n_envs):
+            step = self.current_steps[i].item()
+            if step >= 20:
+                # Get last 20 returns
+                recent_returns = self.returns_history[step-20:step]
+                mean_ret = recent_returns.mean()
+                std_ret = recent_returns.std() + 1e-8
+                sharpe = mean_ret / std_ret
+                
+                # Small bonus for high Sharpe (capped at ±0.1)
+                sharpe_bonus[i] = torch.clamp(torch.tensor(sharpe * 0.1, device=self.device), -0.1, 0.1)
+        
+        rewards += sharpe_bonus
+        
         # Step forward
         self.current_steps += 1
         
@@ -289,7 +317,6 @@ class OptimizedPPOAgent(pl.LightningModule):
         self.lr = lr
         self.clip_eps = clip_eps
         self.rollout_steps = rollout_steps
-        self.ppo_epochs = ppo_epochs
         self.ppo_epochs = ppo_epochs
         self.mini_batch_size = mini_batch_size
         self.entropy_coef = 0.05  # Increased entropy to force exploration (SFT is too shy)
@@ -529,7 +556,7 @@ def main():
     # Hyperparameters - Optimized for GPU
     NUM_TICKERS = 20
     NUM_EPOCHS = 1  # Micro-Mode: Single pass
-    N_ENVS = 256  # Run 64 environments in parallel
+    N_ENVS = 256  # Run 256 environments in parallel
     ROLLOUT_STEPS = 256  # Steps per rollout
     
     # 1. Prepare Data
@@ -566,11 +593,11 @@ def main():
     if os.path.exists(sft_path):
         logger.info(f"🧠 Loading SFT Weights from {sft_path}...")
         try:
-            state_dict = torch.load(sft_path)
+            state_dict = torch.load(sft_path, weights_only=True)
             agent.model.load_state_dict(state_dict)
             logger.info("✅ SFT Weights Loaded! Agent starting with common sense.")
         except Exception as e:
-            logger.error(f"Failed to load SFT weights: {e}")
+            logger.exception("Failed to load SFT weights")
     else:
         logger.warning("⚠️ No SFT weights found. Agent starting from scratch (Random).")
     
