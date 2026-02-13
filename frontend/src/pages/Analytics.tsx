@@ -1,293 +1,199 @@
-import React from 'react';
-import { motion } from 'framer-motion';
-import {
-    AreaChart,
-    Area,
-    BarChart,
-    Bar,
-    XAxis,
-    YAxis,
-    CartesianGrid,
-    Tooltip,
-    ResponsiveContainer,
-    PieChart,
-    Pie,
-    Cell,
-} from 'recharts';
-import { TrendingUp, TrendingDown, Activity, AlertTriangle, Award } from 'lucide-react';
+import { useState, useEffect } from 'react';
 
 interface AnalyticsProps {
-    simState: any;
+    simState?: any;
 }
 
-export const Analytics: React.FC<AnalyticsProps> = ({ simState }) => {
-    if (!simState) {
-        return (
-            <div className="w-full py-20 text-center text-smoke">
-                Loading analytics...
-            </div>
-        );
-    }
-
-    const equityCurve = simState.equity_curve || [];
-    const balance = simState.balance || 10000;
-    const pnl = balance - 10000;
-    const pnlPercent = ((pnl / 10000) * 100);
-    const sharpe = simState.sharpe_ratio || 0;
-    const maxDrawdown = simState.max_drawdown || 0;
-    const score = simState.score || 0;
-    const history = simState.history || [];
-
-    // Prepare chart data
-    const equityData = equityCurve.map((val: number, i: number) => ({
-        day: i + 1,
-        equity: val,
-    }));
-
-    // Calculate daily returns for histogram
-    const dailyReturns: number[] = [];
-    for (let i = 1; i < equityCurve.length; i++) {
-        const ret = ((equityCurve[i] - equityCurve[i - 1]) / equityCurve[i - 1]) * 100;
-        dailyReturns.push(ret);
-    }
-
-    // Group returns into buckets for histogram
-    const returnBuckets: { range: string; count: number; color: string }[] = [
-        { range: '< -2%', count: 0, color: '#EF4444' },
-        { range: '-2 to -1%', count: 0, color: '#F97316' },
-        { range: '-1 to 0%', count: 0, color: '#FBBF24' },
-        { range: '0 to 1%', count: 0, color: '#84CC16' },
-        { range: '1 to 2%', count: 0, color: '#22C55E' },
-        { range: '> 2%', count: 0, color: '#10B981' },
-    ];
-
-    dailyReturns.forEach(ret => {
-        if (ret < -2) returnBuckets[0].count++;
-        else if (ret < -1) returnBuckets[1].count++;
-        else if (ret < 0) returnBuckets[2].count++;
-        else if (ret < 1) returnBuckets[3].count++;
-        else if (ret < 2) returnBuckets[4].count++;
-        else returnBuckets[5].count++;
+export const Analytics = ({ simState }: AnalyticsProps) => {
+    const [metrics, setMetrics] = useState({
+        totalTrades: 0,
+        winRate: 0,
+        avgReturn: 0,
+        sharpeRatio: 0,
+        maxDrawdown: 0,
+        profitFactor: 0
     });
 
-    // Win/Loss pie data
-    const wins = history.filter((h: string) => h.includes('SELL_TP')).length;
-    const losses = history.filter((h: string) => h.includes('SELL_SL')).length;
-    const pieData = [
-        { name: 'Wins', value: wins, color: '#10B981' },
-        { name: 'Losses', value: losses, color: '#EF4444' },
-    ];
-    const winRate = wins + losses > 0 ? (wins / (wins + losses)) * 100 : 0;
+    useEffect(() => {
+        // Calculate metrics from simulation state
+        if (simState?.history && simState.history.length > 0) {
+            const history = simState.history;
+            const trades = history.length;
 
-    // Metric Card component
-    const MetricCard = ({ icon: Icon, label, value, subvalue, color }: any) => (
-        <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="panel p-5"
-        >
-            <div className="flex items-start justify-between">
-                <div>
-                    <p className="text-xs text-smoke uppercase tracking-wider mb-1">{label}</p>
-                    <p className={`font-mono text-2xl font-bold ${color}`}>{value}</p>
-                    {subvalue && <p className="text-xs text-smoke mt-1">{subvalue}</p>}
-                </div>
-                <div className={`p-2 rounded-lg bg-${color === 'text-sage' ? 'sage' : color === 'text-crimson' ? 'crimson' : 'amber'}/10`}>
-                    <Icon size={18} className={color} />
-                </div>
-            </div>
-        </motion.div>
-    );
+            // Calculate win rate
+            const wins = history.filter((h: any) => h.port_value > (h.prev_port_value || simState.initial_balance)).length;
+            const winRate = trades > 0 ? (wins / trades) * 100 : 0;
+
+            // Calculate average return
+            const returns = history.map((h: any) =>
+                ((h.port_value - (h.prev_port_value || simState.initial_balance)) / (h.prev_port_value || simState.initial_balance)) * 100
+            );
+            const avgReturn = returns.reduce((a: number, b: number) => a + b, 0) / (returns.length || 1);
+
+            // Calculate max drawdown
+            let peak = simState.initial_balance;
+            let maxDD = 0;
+            history.forEach((h: any) => {
+                if (h.port_value > peak) peak = h.port_value;
+                const dd = ((peak - h.port_value) / peak) * 100;
+                if (dd > maxDD) maxDD = dd;
+            });
+
+            setMetrics({
+                totalTrades: trades,
+                winRate,
+                avgReturn,
+                sharpeRatio: simState.sharpe_ratio || 0,
+                maxDrawdown: maxDD,
+                profitFactor: winRate > 0 ? (winRate / (100 - winRate)) : 0
+            });
+        }
+    }, [simState]);
+
+    const currentBalance = simState?.balance || simState?.initial_balance || 10000;
+    const initialBalance = simState?.initial_balance || 10000;
+    const totalReturn = ((currentBalance - initialBalance) / initialBalance) * 100;
+    const level = simState?.level || 1;
+    const status = simState?.status || 'IDLE';
 
     return (
-        <div className="w-full max-w-[1400px] px-4 py-8">
-            <motion.h1
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="font-display text-3xl font-bold text-chalk mb-8"
-            >
-                Analytics
-            </motion.h1>
+        <div className="w-full max-w-7xl mx-auto py-20 px-6">
+            <h1 className="font-display text-4xl font-bold text-chalk mb-2">
+                Performance Analytics
+            </h1>
+            <p className="text-smoke text-lg mb-8">
+                Real-time trading performance metrics
+            </p>
 
-            {/* Key Metrics Grid */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            {/* Portfolio Overview */}
+            <div className="grid grid-cols-3 gap-6 mb-8">
+                <div className="panel p-6">
+                    <div className="text-smoke text-sm font-semibold mb-2">Current Balance</div>
+                    <div className="text-4xl font-bold text-chalk">
+                        ${currentBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </div>
+                    <div className={`text-sm mt-2 ${totalReturn >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {totalReturn >= 0 ? '↑' : '↓'} {Math.abs(totalReturn).toFixed(2)}% from start
+                    </div>
+                </div>
+
+                <div className="panel p-6">
+                    <div className="text-smoke text-sm font-semibold mb-2">Agent Level</div>
+                    <div className="text-4xl font-bold text-amber">
+                        Level {level}
+                    </div>
+                    <div className="text-sm text-smoke mt-2">
+                        Status: {status}
+                    </div>
+                </div>
+
+                <div className="panel p-6">
+                    <div className="text-smoke text-sm font-semibold mb-2">Total Trades</div>
+                    <div className="text-4xl font-bold text-chalk">
+                        {metrics.totalTrades}
+                    </div>
+                    <div className="text-sm text-smoke mt-2">
+                        Since deployment
+                    </div>
+                </div>
+            </div>
+
+            {/* Performance Metrics */}
+            <h2 className="text-2xl font-bold text-chalk mb-4">Key Metrics</h2>
+            <div className="grid grid-cols-2 gap-6 mb-8">
                 <MetricCard
-                    icon={pnl >= 0 ? TrendingUp : TrendingDown}
-                    label="Total P&L"
-                    value={`${pnl >= 0 ? '+' : ''}₹${pnl.toFixed(0)}`}
-                    subvalue={`${pnlPercent >= 0 ? '+' : ''}${pnlPercent.toFixed(2)}%`}
-                    color={pnl >= 0 ? 'text-sage' : 'text-crimson'}
+                    title="Win Rate"
+                    value={`${metrics.winRate.toFixed(1)}%`}
+                    description="Percentage of profitable trades"
+                    color={metrics.winRate >= 60 ? 'emerald' : metrics.winRate >= 50 ? 'amber' : 'red'}
                 />
                 <MetricCard
-                    icon={Activity}
-                    label="Sharpe Ratio"
-                    value={sharpe.toFixed(2)}
-                    subvalue="Risk-adjusted return"
-                    color={sharpe > 0 ? 'text-sage' : 'text-crimson'}
+                    title="Average Return"
+                    value={`${metrics.avgReturn >= 0 ? '+' : ''}${metrics.avgReturn.toFixed(2)}%`}
+                    description="Average return per trade"
+                    color={metrics.avgReturn >= 0 ? 'emerald' : 'red'}
                 />
                 <MetricCard
-                    icon={AlertTriangle}
-                    label="Max Drawdown"
-                    value={`${maxDrawdown.toFixed(1)}%`}
-                    subvalue="Largest peak-to-trough"
-                    color="text-amber"
+                    title="Max Drawdown"
+                    value={`${metrics.maxDrawdown.toFixed(2)}%`}
+                    description="Largest peak-to-trough decline"
+                    color={metrics.maxDrawdown <= 10 ? 'emerald' : metrics.maxDrawdown <= 20 ? 'amber' : 'red'}
                 />
                 <MetricCard
-                    icon={Award}
-                    label="Win Rate"
-                    value={`${winRate.toFixed(0)}%`}
-                    subvalue={`${wins}W / ${losses}L`}
-                    color={winRate >= 50 ? 'text-sage' : 'text-crimson'}
+                    title="Profit Factor"
+                    value={metrics.profitFactor.toFixed(2)}
+                    description="Ratio of gross profit to gross loss"
+                    color={metrics.profitFactor >= 1.5 ? 'emerald' : metrics.profitFactor >= 1.0 ? 'amber' : 'red'}
                 />
             </div>
 
-            {/* Charts Row */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                {/* Equity Curve */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.1 }}
-                    className="panel p-6"
-                >
-                    <h3 className="font-display text-lg font-bold text-chalk mb-4">Equity Curve</h3>
-                    <div className="h-64">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={equityData}>
-                                <defs>
-                                    <linearGradient id="equityGradientAnalytics" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.3} />
-                                        <stop offset="95%" stopColor="#F59E0B" stopOpacity={0} />
-                                    </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#2A2A32" />
-                                <XAxis dataKey="day" stroke="#71717A" fontSize={10} />
-                                <YAxis stroke="#71717A" fontSize={10} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
-                                <Tooltip
-                                    contentStyle={{ background: '#141418', border: '1px solid #2A2A32', borderRadius: '8px' }}
-                                    labelStyle={{ color: '#F5F5F5' }}
-                                    formatter={(value: number) => [`₹${value.toFixed(0)}`, 'Equity']}
-                                />
-                                <Area
-                                    type="monotone"
-                                    dataKey="equity"
-                                    stroke="#F59E0B"
-                                    strokeWidth={2}
-                                    fill="url(#equityGradientAnalytics)"
-                                />
-                            </AreaChart>
-                        </ResponsiveContainer>
-                    </div>
-                </motion.div>
-
-                {/* Return Distribution */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.2 }}
-                    className="panel p-6"
-                >
-                    <h3 className="font-display text-lg font-bold text-chalk mb-4">Return Distribution</h3>
-                    <div className="h-64">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={returnBuckets}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#2A2A32" />
-                                <XAxis dataKey="range" stroke="#71717A" fontSize={9} />
-                                <YAxis stroke="#71717A" fontSize={10} />
-                                <Tooltip
-                                    contentStyle={{ background: '#141418', border: '1px solid #2A2A32', borderRadius: '8px' }}
-                                    labelStyle={{ color: '#F5F5F5' }}
-                                />
-                                <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                                    {returnBuckets.map((entry, index) => (
-                                        <Cell key={index} fill={entry.color} />
-                                    ))}
-                                </Bar>
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </div>
-                </motion.div>
-            </div>
-
-            {/* Win/Loss Pie + Score */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.3 }}
-                    className="panel p-6"
-                >
-                    <h3 className="font-display text-lg font-bold text-chalk mb-4">Win/Loss Ratio</h3>
-                    <div className="h-48">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                                <Pie
-                                    data={pieData}
-                                    cx="50%"
-                                    cy="50%"
-                                    innerRadius={40}
-                                    outerRadius={70}
-                                    paddingAngle={5}
-                                    dataKey="value"
-                                >
-                                    {pieData.map((entry, index) => (
-                                        <Cell key={index} fill={entry.color} />
-                                    ))}
-                                </Pie>
-                                <Tooltip
-                                    contentStyle={{ background: '#141418', border: '1px solid #2A2A32', borderRadius: '8px' }}
-                                />
-                            </PieChart>
-                        </ResponsiveContainer>
-                    </div>
-                    <div className="flex justify-center gap-6 mt-2">
-                        <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full bg-sage" />
-                            <span className="text-xs text-smoke">Wins ({wins})</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full bg-crimson" />
-                            <span className="text-xs text-smoke">Losses ({losses})</span>
-                        </div>
-                    </div>
-                </motion.div>
-
-                {/* Score Progress */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.4 }}
-                    className="panel p-6 md:col-span-2"
-                >
-                    <h3 className="font-display text-lg font-bold text-chalk mb-4">Level Progress</h3>
-                    <div className="space-y-4">
-                        <div className="flex justify-between text-sm">
-                            <span className="text-smoke">Current Level</span>
-                            <span className="text-amber font-semibold">{simState.level}</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                            <span className="text-smoke">Score</span>
-                            <span className="text-chalk font-mono">{score} pts</span>
-                        </div>
-                        <div className="space-y-2">
-                            {[
-                                { level: 'Novice', threshold: 0 },
-                                { level: 'Apprentice', threshold: 50 },
-                                { level: 'Pro', threshold: 100 },
-                                { level: 'Grandmaster', threshold: 200 },
-                                { level: 'Wolf', threshold: 500 },
-                            ].map((tier, idx) => (
-                                <div key={idx} className="flex items-center gap-3">
-                                    <div className={`w-3 h-3 rounded-full ${score >= tier.threshold ? 'bg-amber' : 'bg-graphite'}`} />
-                                    <span className={`text-xs ${score >= tier.threshold ? 'text-chalk' : 'text-smoke'}`}>
-                                        {tier.level} ({tier.threshold}+)
-                                    </span>
+            {/* Recent Activity */}
+            <h2 className="text-2xl font-bold text-chalk mb-4">Recent Activity</h2>
+            <div className="panel p-6">
+                {simState?.history && simState.history.length > 0 ? (
+                    <div className="space-y-3">
+                        {simState.history.slice(-5).reverse().map((trade: any, i: number) => (
+                            <div key={i} className="flex items-center justify-between border-b border-graphite/30 pb-3 last:border-0">
+                                <div>
+                                    <div className="text-chalk font-semibold">{trade.ticker || 'N/A'}</div>
+                                    <div className="text-smoke text-sm">{trade.action || 'HOLD'}</div>
                                 </div>
-                            ))}
-                        </div>
+                                <div className="text-right">
+                                    <div className={`font-mono font-bold ${trade.port_value > (trade.prev_port_value || initialBalance)
+                                            ? 'text-emerald-400'
+                                            : 'text-red-400'
+                                        }`}>
+                                        ${trade.port_value?.toFixed(2) || '0.00'}
+                                    </div>
+                                    <div className="text-smoke text-sm">
+                                        {new Date(trade.timestamp || Date.now()).toLocaleDateString()}
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
                     </div>
-                </motion.div>
+                ) : (
+                    <div className="text-smoke text-center py-8">
+                        No trading activity yet. Start the simulation to see metrics.
+                    </div>
+                )}
             </div>
+
+            {/* Info Banner */}
+            <div className="mt-8 p-4 bg-slate/20 border border-graphite/50 rounded-lg">
+                <div className="text-amber font-semibold mb-2">💡 About Analytics</div>
+                <div className="text-smoke text-sm">
+                    This dashboard shows real-time performance metrics from your trading simulation.
+                    Metrics update automatically as the agent trades. For deeper statistical analysis,
+                    run <code className="bg-slate/30 px-2 py-1 rounded">python -m src.analysis.runner</code>
+                    to generate expert performance reports and edge validation tests.
+                </div>
+            </div>
+        </div>
+    );
+};
+
+interface MetricCardProps {
+    title: string;
+    value: string;
+    description: string;
+    color: 'emerald' | 'amber' | 'red';
+}
+
+const MetricCard = ({ title, value, description, color }: MetricCardProps) => {
+    const colorClasses = {
+        emerald: 'text-emerald-400 border-emerald-500/30 bg-emerald-500/5',
+        amber: 'text-amber border-amber/30 bg-amber/5',
+        red: 'text-red-400 border-red-500/30 bg-red-500/5'
+    };
+
+    return (
+        <div className={`panel p-6 border-2 ${colorClasses[color]}`}>
+            <div className="text-smoke text-sm font-semibold mb-2">{title}</div>
+            <div className={`text-3xl font-bold ${colorClasses[color].split(' ')[0]}`}>
+                {value}
+            </div>
+            <div className="text-xs text-ash mt-2">{description}</div>
         </div>
     );
 };

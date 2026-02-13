@@ -26,6 +26,8 @@ The system has evolved from a simple scanner to a reasoning agent:
 ## 📚 Documentation
 *   **[Project Manual](docs/PROJECT_MANUAL.md)**: Detailed guide on setup, architecture, and modules.
 *   **[Architecture Roadmap](docs/ARCHITECTURE_ROADMAP.md)**: The evolution path (Phase 1 to Phase 8).
+*   **[Data Schemas](docs/DATA_SCHEMAS.md)**: Complete reference for all data structures and features.
+*   **[Analysis Guide](docs/ANALYSIS_GUIDE.md)**: How to use the analysis framework and enhanced metrics.
 *   **[Research Logs](docs/research/experiments_log.md)**: History of training experiments (MLP vs LSTM, Reward Shaping).
 
 ---
@@ -59,9 +61,45 @@ python -m src.trader_alpaca --symbol RELIANCE.NS --qty 1 --live
 
 ---
 
-## 📂 Project Structure
+## � Analysis & Metrics
+
+### Run Performance Analysis
+```bash
+python -m src.analysis.runner
+# Select 0 to run all analyses
+```
+
+### View Analytics Dashboard
+```bash
+cd frontend && npm run dev
+# Navigate to http://localhost:5173/analytics
+```
+
+### Available Analyses
+- **Expert Performance**: Compare confidence and activity across all 4 experts
+- **Edge Validation**: Statistical significance testing (chi-square) of trading edge
+
+### Enhanced Metrics
+- **Sortino Ratio**: Downside-adjusted return
+- **Win Rate**: % of profitable trades
+- **Profit Factor**: Gross profit/loss ratio
+- **Calmar Ratio**: Return per unit of drawdown
+
+### Outputs
+- PNG charts: `output/expert_performance.png`, `output/edge_validation.png`
+- JSON data: `output/*.json`
+- Interactive dashboard: `/analytics` route
+
+---
+
+---
+
+## �📂 Project Structure
 
 *   `src/`
+    *   **Analysis Framework**:
+        *   `analysis/`: Modular analysis system (expert performance, edge validation).
+        *   `metrics_enhanced.py`: Enhanced backtest metrics (Sortino, Win Rate, Profit Factor).
     *   **Agent Logic**:
         *   `train_ppo_optimized.py`: The main RL Training Loop (Vectorized PPO + LSTM).
         *   `train_sft.py`: The Teacher (Supervised Fine-Tuning).
@@ -71,10 +109,11 @@ python -m src.trader_alpaca --symbol RELIANCE.NS --qty 1 --live
         *   `trader_alpaca.py`: **Live Trading Script**.
     *   **Core**:
         *   `data_loader.py`: Nifty 500 Data Fetcher.
-*   `frontend/`: React Dashboard (Archives/Visualizer).
+*   `frontend/`: React Dashboard with Analytics page (`/analytics`).
+*   `output/`: Generated analysis outputs (PNG charts + JSON data).
 *   `checkpoints/`: RL Model Weights (`best_ppo.ckpt`).
 *   `checkpoints_sft/`: SFT Model Weights (`final_sft_model.pth`).
-*   `docs/`: detailed documentation.
+*   `docs/`: Detailed documentation including data schemas and analysis guide.
 
 ---
 
