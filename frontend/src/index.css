@@ -143,6 +143,51 @@
     .inner-glow {
         box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
     }
+
+    /* Custom Range Slider */
+    .range-amber {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 100%;
+        height: 6px;
+        border-radius: 999px;
+        background: linear-gradient(to right, #F59E0B var(--range-progress, 50%), #2A2A32 var(--range-progress, 50%));
+        outline: none;
+        cursor: pointer;
+    }
+
+    .range-amber::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #F59E0B, #D97706);
+        border: 2px solid #0D0D0F;
+        box-shadow: 0 0 10px rgba(245, 158, 11, 0.3), 0 2px 4px rgba(0, 0, 0, 0.5);
+        cursor: pointer;
+        transition: box-shadow 0.2s;
+    }
+
+    .range-amber::-webkit-slider-thumb:hover {
+        box-shadow: 0 0 16px rgba(245, 158, 11, 0.5), 0 2px 6px rgba(0, 0, 0, 0.6);
+    }
+
+    .range-amber::-moz-range-thumb {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #F59E0B, #D97706);
+        border: 2px solid #0D0D0F;
+        box-shadow: 0 0 10px rgba(245, 158, 11, 0.3), 0 2px 4px rgba(0, 0, 0, 0.5);
+        cursor: pointer;
+    }
+
+    .range-amber::-moz-range-track {
+        height: 6px;
+        border-radius: 999px;
+        background: transparent;
+    }
 }
 
 /* === Scrollbar === */

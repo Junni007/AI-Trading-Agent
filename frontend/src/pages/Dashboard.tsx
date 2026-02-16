@@ -4,7 +4,8 @@ import { Hero } from '../components/Hero';
 import { SimulationPanel } from '../components/SimulationPanel';
 import { Terminal } from '../components/Terminal';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Radio, Radar } from 'lucide-react';
+import { Search, Radar } from 'lucide-react';
+import { CardSkeleton, EmptyState } from '../components/Skeleton';
 
 interface DashboardProps {
     data: any[];
@@ -20,40 +21,7 @@ interface DashboardProps {
     logs: string[];
 }
 
-// Skeleton card for loading state
-const SkeletonCard = ({ delay = 0 }: { delay?: number }) => (
-    <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay, duration: 0.3 }}
-        className="panel p-6 space-y-4 animate-pulse"
-    >
-        {/* Header */}
-        <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-graphite/50" />
-                <div className="space-y-1.5">
-                    <div className="w-20 h-4 bg-graphite/50 rounded" />
-                    <div className="w-14 h-3 bg-graphite/30 rounded" />
-                </div>
-            </div>
-            <div className="w-12 h-12 rounded-full border-2 border-graphite/30" />
-        </div>
-        {/* Action badge */}
-        <div className="w-28 h-6 bg-graphite/40 rounded-lg" />
-        {/* Reasoning lines */}
-        <div className="space-y-2 pt-2 border-t border-graphite/20">
-            <div className="w-full h-3 bg-graphite/30 rounded" />
-            <div className="w-4/5 h-3 bg-graphite/30 rounded" />
-            <div className="w-3/5 h-3 bg-graphite/20 rounded" />
-        </div>
-        {/* Footer */}
-        <div className="flex justify-between items-center pt-2">
-            <div className="w-16 h-5 bg-graphite/20 rounded" />
-            <div className="w-20 h-7 bg-graphite/30 rounded-lg" />
-        </div>
-    </motion.div>
-);
+
 
 export const Dashboard = ({ data, loading, marketMood, lastUpdated, simState, onResetSim, onScan, isAuto, isLocked, onDetails, logs }: DashboardProps) => {
     const [filter, setFilter] = useState<'all' | 'opportunities' | 'watch'>('all');
@@ -143,7 +111,14 @@ export const Dashboard = ({ data, loading, marketMood, lastUpdated, simState, on
                     </motion.div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                         {[0, 1, 2, 3, 4, 5].map((i) => (
-                            <SkeletonCard key={i} delay={i * 0.08} />
+                            <motion.div
+                                key={i}
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: i * 0.1 }}
+                            >
+                                <CardSkeleton />
+                            </motion.div>
                         ))}
                     </div>
                 </div>
@@ -175,17 +150,14 @@ export const Dashboard = ({ data, loading, marketMood, lastUpdated, simState, on
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="py-20 flex flex-col items-center text-center gap-4"
                 >
-                    <div className="w-16 h-16 rounded-2xl bg-slate/50 flex items-center justify-center border border-graphite">
-                        <Radio size={24} className="text-amber/40" />
-                    </div>
-                    <div>
-                        <h3 className="text-lg font-display font-bold text-chalk mb-1">No Signals Yet</h3>
-                        <p className="text-smoke text-sm max-w-md">
-                            The engine hasn't generated any signals yet. Hit "Initialize Scan" above to begin analysis, or wait for the auto-scan to kick in.
-                        </p>
-                    </div>
+                    <EmptyState
+                        icon={Radar}
+                        title="No Signals Yet"
+                        description="The engine hasn't generated any signals yet. Hit 'Initialize Scan' above to begin analysis, or wait for the auto-scan to kick in."
+                        action="Initialize Scan"
+                        onAction={onScan}
+                    />
                 </motion.div>
             )}
 

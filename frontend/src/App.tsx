@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import axios from 'axios';
+import api from './services/api';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { CustomCursor } from './components/CustomCursor';
 import { Header } from './components/Header';
@@ -7,6 +7,7 @@ import { Footer } from './components/Footer';
 import { DetailsModal } from './components/DetailsModal';
 import { ToastProvider, useToast } from './components/Toast';
 import { notificationService } from './services/notificationService';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { WifiOff } from 'lucide-react';
 
 // Pages
@@ -64,7 +65,7 @@ function AppContent() {
 
     // Fetch initial Sim State
     useEffect(() => {
-        axios.get('http://localhost:8000/api/simulation/state')
+        api.get('/api/simulation/state')
             .then(res => {
                 setSimState(res.data);
                 setIsConnected(true);
@@ -101,8 +102,8 @@ function AppContent() {
     const runScan = async (silent = false) => {
         if (!silent) setLoading(true);
         try {
-            await axios.get('http://localhost:8000/api/scan');
-            const res = await axios.get('http://localhost:8000/api/results');
+            await api.get('/api/scan');
+            const res = await api.get('/api/results');
 
             if (!isConnected) {
                 setIsConnected(true);
@@ -142,7 +143,7 @@ function AppContent() {
 
     const resetSim = async () => {
         try {
-            const res = await axios.post('http://localhost:8000/api/simulation/reset');
+            const res = await api.post('/api/simulation/reset');
             setSimState(res.data.state);
             addToast('success', 'Simulation reset successfully');
         } catch (err) {
@@ -218,7 +219,7 @@ function AppContent() {
                             logs={logs}
                         />
                     } />
-                    <Route path="/signals" element={<Signals data={data} onDetails={openDetails} />} />
+                    <Route path="/signals" element={<Signals data={data} loading={loading} onDetails={openDetails} />} />
                     <Route path="/analytics" element={<Analytics simState={simState} />} />
                     <Route path="/settings" element={<Settings />} />
                 </Routes>
@@ -233,7 +234,9 @@ function App() {
     return (
         <Router>
             <ToastProvider>
-                <AppContent />
+                <ErrorBoundary>
+                    <AppContent />
+                </ErrorBoundary>
             </ToastProvider>
         </Router>
     );

@@ -61,7 +61,7 @@ export const AlertSettings: React.FC<AlertSettingsProps> = ({ onClose }) => {
         <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="panel p-6 w-full max-w-md"
+            className="w-full"
         >
             <div className="flex justify-between items-center mb-6">
                 <h3 className="font-display text-lg font-bold text-chalk">Alert Settings</h3>

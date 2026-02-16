@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowUpDown, Filter, Eye, Zap, Shield, Search, ArrowUpRight } from 'lucide-react';
+import { ArrowUpDown, Filter, Eye, Zap, Shield, Search, ArrowUpRight, Radio } from 'lucide-react';
+import { Skeleton, CardSkeleton, EmptyState } from '../components/Skeleton';
 
 interface SignalItem {
     Ticker: string;
@@ -17,10 +18,11 @@ type FilterTab = 'all' | 'buy' | 'watch';
 
 interface SignalsProps {
     data: SignalItem[];
+    loading?: boolean;
     onDetails?: (ticker: string, action: string, steps: string[], confidence: number, history: any[], quant?: any) => void;
 }
 
-export const Signals = ({ data, onDetails }: SignalsProps) => {
+export const Signals = ({ data, loading = false, onDetails }: SignalsProps) => {
     const [sortKey, setSortKey] = useState<SortKey>('Confidence');
     const [sortDir, setSortDir] = useState<SortDir>('desc');
     const [filterTab, setFilterTab] = useState<FilterTab>('all');
@@ -162,10 +164,24 @@ export const Signals = ({ data, onDetails }: SignalsProps) => {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-graphite/50 text-sm font-body">
-                        {filteredAndSorted.length === 0 ? (
+                        {loading ? (
+                            Array.from({ length: 5 }).map((_, i) => (
+                                <tr key={i} className="animate-pulse">
+                                    <td className="px-6 py-4"><Skeleton className="w-24 h-5" /></td>
+                                    <td className="px-6 py-4"><Skeleton className="w-20 h-6 rounded-lg" /></td>
+                                    <td className="px-6 py-4"><div className="flex items-center gap-3"><Skeleton className="w-20 h-2 bg-graphite/50" /><Skeleton className="w-8 h-4" /></div></td>
+                                    <td className="px-6 py-4"><Skeleton className="w-full h-4" /></td>
+                                    <td className="px-4 py-4"><Skeleton className="w-6 h-6 rounded-lg" /></td>
+                                </tr>
+                            ))
+                        ) : filteredAndSorted.length === 0 ? (
                             <tr>
-                                <td colSpan={5} className="px-6 py-10 text-center text-smoke">
-                                    {data.length === 0 ? 'No active signals. Run a scan first.' : 'No signals match your filters.'}
+                                <td colSpan={5} className="px-6 py-10">
+                                    <EmptyState
+                                        icon={Radio}
+                                        title={data.length === 0 ? 'No Active Signals' : 'No Matches'}
+                                        description={data.length === 0 ? "The engine hasn't generated any signals yet." : "No signals match your current filters."}
+                                    />
                                 </td>
                             </tr>
                         ) : (
@@ -205,7 +221,7 @@ export const Signals = ({ data, onDetails }: SignalsProps) => {
                                         </td>
                                         <td className="px-4 py-4">
                                             <button
-                                                onClick={() => onDetails?.(item.Ticker, item.Action, item.Rational, item.Confidence, item.History || [])}
+                                                onClick={() => onDetails?.(item.Ticker, item.Action, item.Rational, item.Confidence, item.History || [], item.QuantRisk)}
                                                 className="p-1.5 rounded-lg hover:bg-slate/50 text-smoke hover:text-amber transition-all cursor-pointer group"
                                                 title={`View details for ${item.Ticker}`}
                                                 aria-label={`View details for ${item.Ticker}`}
@@ -224,9 +240,24 @@ export const Signals = ({ data, onDetails }: SignalsProps) => {
             {/* Mobile Card View */}
             <div className="md:hidden space-y-3">
                 <AnimatePresence mode="popLayout">
-                    {filteredAndSorted.length === 0 ? (
-                        <div className="panel p-8 text-center text-smoke">
-                            {data.length === 0 ? 'No active signals. Run a scan first.' : 'No signals match your filters.'}
+                    {loading ? (
+                        Array.from({ length: 3 }).map((_, i) => (
+                            <motion.div
+                                key={i}
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                transition={{ delay: i * 0.1 }}
+                            >
+                                <CardSkeleton />
+                            </motion.div>
+                        ))
+                    ) : filteredAndSorted.length === 0 ? (
+                        <div className="py-8">
+                            <EmptyState
+                                icon={Radio}
+                                title={data.length === 0 ? 'No Active Signals' : 'No Matches'}
+                                description={data.length === 0 ? "The engine hasn't generated any signals yet." : "No signals match your current filters."}
+                            />
                         </div>
                     ) : (
                         filteredAndSorted.map((item, i) => (
@@ -260,7 +291,7 @@ export const Signals = ({ data, onDetails }: SignalsProps) => {
                                 <div className="flex items-center justify-between mt-3 pt-2 border-t border-graphite/30">
                                     <p className="text-xs text-ash line-clamp-1 flex-1 mr-3">{item.Rational[item.Rational.length - 1]}</p>
                                     <button
-                                        onClick={() => onDetails?.(item.Ticker, item.Action, item.Rational, item.Confidence, item.History || [])}
+                                        onClick={() => onDetails?.(item.Ticker, item.Action, item.Rational, item.Confidence, item.History || [], item.QuantRisk)}
                                         className="flex items-center gap-1 text-[11px] text-amber hover:text-chalk transition-colors cursor-pointer group shrink-0"
                                         title={`View details for ${item.Ticker}`}
                                     >
