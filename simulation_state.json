@@ -1,0 +1,15 @@
+{
+    "balance": 10000.0,
+    "cash": 10000.0,
+    "positions": {},
+    "history": [],
+    "score": 0,
+    "level": "Novice (Risk Taker)",
+    "status": "ALIVE",
+    "equity_curve": [
+        10000.0,
+        10000.0
+    ],
+    "max_drawdown": 0,
+    "sharpe_ratio": 0.0
+}

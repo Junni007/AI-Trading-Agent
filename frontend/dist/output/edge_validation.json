@@ -1,0 +1,32 @@
+{
+  "confidence_buckets": [
+    "Low\n(40-60%)",
+    "Medium\n(60-80%)",
+    "High\n(80-100%)"
+  ],
+  "win_rates": [
+    0.52,
+    0.61,
+    0.73
+  ],
+  "trade_counts": [
+    80,
+    120,
+    45
+  ],
+  "avg_pnl_pct": [
+    0.3,
+    1.2,
+    2.5
+  ],
+  "statistical_significance": {
+    "chi_square": 5.223278126926165,
+    "p_value": 0.0734141147014993,
+    "significant": "False",
+    "alpha": 0.05
+  },
+  "edge_summary": {
+    "high_confidence_premium": "21.0% better win rate",
+    "total_trades_analyzed": 245
+  }
+}

@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { ThinkingNode } from '../components/ThinkingNode';
-import { Loader } from '../components/Loader';
 import { Hero } from '../components/Hero';
 import { SimulationPanel } from '../components/SimulationPanel';
 import { Terminal } from '../components/Terminal';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search } from 'lucide-react';
+import { Search, Radio, Radar } from 'lucide-react';
 
 interface DashboardProps {
     data: any[];
@@ -17,9 +16,44 @@ interface DashboardProps {
     onScan: () => void;
     isAuto: boolean;
     isLocked: boolean;
-    onDetails: (ticker: string, action: string, steps: string[], confidence: number, history: any[]) => void;
+    onDetails: (ticker: string, action: string, steps: string[], confidence: number, history: any[], quant?: any) => void;
     logs: string[];
 }
+
+// Skeleton card for loading state
+const SkeletonCard = ({ delay = 0 }: { delay?: number }) => (
+    <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay, duration: 0.3 }}
+        className="panel p-6 space-y-4 animate-pulse"
+    >
+        {/* Header */}
+        <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-graphite/50" />
+                <div className="space-y-1.5">
+                    <div className="w-20 h-4 bg-graphite/50 rounded" />
+                    <div className="w-14 h-3 bg-graphite/30 rounded" />
+                </div>
+            </div>
+            <div className="w-12 h-12 rounded-full border-2 border-graphite/30" />
+        </div>
+        {/* Action badge */}
+        <div className="w-28 h-6 bg-graphite/40 rounded-lg" />
+        {/* Reasoning lines */}
+        <div className="space-y-2 pt-2 border-t border-graphite/20">
+            <div className="w-full h-3 bg-graphite/30 rounded" />
+            <div className="w-4/5 h-3 bg-graphite/30 rounded" />
+            <div className="w-3/5 h-3 bg-graphite/20 rounded" />
+        </div>
+        {/* Footer */}
+        <div className="flex justify-between items-center pt-2">
+            <div className="w-16 h-5 bg-graphite/20 rounded" />
+            <div className="w-20 h-7 bg-graphite/30 rounded-lg" />
+        </div>
+    </motion.div>
+);
 
 export const Dashboard = ({ data, loading, marketMood, lastUpdated, simState, onResetSim, onScan, isAuto, isLocked, onDetails, logs }: DashboardProps) => {
     const [filter, setFilter] = useState<'all' | 'opportunities' | 'watch'>('all');
@@ -41,6 +75,8 @@ export const Dashboard = ({ data, loading, marketMood, lastUpdated, simState, on
         { id: 'watch', label: 'Watching' }
     ];
 
+    const isInitialLoad = loading && data.length === 0;
+
     return (
         <div className="w-full flex flex-col items-center">
             <Hero
@@ -56,7 +92,7 @@ export const Dashboard = ({ data, loading, marketMood, lastUpdated, simState, on
             <Terminal logs={logs} />
 
             {/* Controls Section */}
-            {!loading && data.length > 0 && (
+            {!isInitialLoad && data.length > 0 && (
                 <div className="w-full max-w-[1400px] px-4 mb-8 flex flex-col md:flex-row justify-between items-center gap-4">
 
                     {/* Filter Tabs */}
@@ -94,10 +130,22 @@ export const Dashboard = ({ data, loading, marketMood, lastUpdated, simState, on
                 </div>
             )}
 
-            {/* Loading State */}
-            {loading && data.length === 0 ? (
-                <div className="py-24">
-                    <Loader />
+            {/* Skeleton Loading State */}
+            {isInitialLoad ? (
+                <div className="w-full max-w-[1400px] px-4">
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="flex items-center gap-3 mb-6 text-smoke"
+                    >
+                        <Radar size={16} className="text-amber animate-spin" style={{ animationDuration: '3s' }} />
+                        <span className="text-sm font-body">Scanning markets and analyzing signals...</span>
+                    </motion.div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                        {[0, 1, 2, 3, 4, 5].map((i) => (
+                            <SkeletonCard key={i} delay={i * 0.08} />
+                        ))}
+                    </div>
                 </div>
             ) : (
                 <motion.div
@@ -122,7 +170,26 @@ export const Dashboard = ({ data, loading, marketMood, lastUpdated, simState, on
                 </motion.div>
             )}
 
-            {/* Empty State */}
+            {/* Empty State — No data at all (not scanning) */}
+            {!loading && data.length === 0 && (
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="py-20 flex flex-col items-center text-center gap-4"
+                >
+                    <div className="w-16 h-16 rounded-2xl bg-slate/50 flex items-center justify-center border border-graphite">
+                        <Radio size={24} className="text-amber/40" />
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-display font-bold text-chalk mb-1">No Signals Yet</h3>
+                        <p className="text-smoke text-sm max-w-md">
+                            The engine hasn't generated any signals yet. Hit "Initialize Scan" above to begin analysis, or wait for the auto-scan to kick in.
+                        </p>
+                    </div>
+                </motion.div>
+            )}
+
+            {/* Filtered Empty State */}
             {!loading && filteredData.length === 0 && data.length > 0 && (
                 <div className="py-20 text-smoke text-lg font-body">
                     No signals match your filter.

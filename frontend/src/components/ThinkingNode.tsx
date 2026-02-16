@@ -10,7 +10,7 @@ interface ThinkingNodeProps {
     steps: string[];
     history?: any[];
     quant?: { WinRate: number };
-    onDetails: (ticker: string, action: string, steps: string[], confidence: number, history: any[]) => void;
+    onDetails: (ticker: string, action: string, steps: string[], confidence: number, history: any[], quant?: any) => void;
 }
 
 export const ThinkingNode: React.FC<ThinkingNodeProps> = ({ ticker, regime, action, confidence, steps, history, quant, onDetails }) => {
@@ -148,7 +148,7 @@ export const ThinkingNode: React.FC<ThinkingNodeProps> = ({ ticker, regime, acti
 
             {/* Action Button */}
             <button
-                onClick={() => onDetails(ticker, action, steps, confidence, history || [])}
+                onClick={() => onDetails(ticker, action, steps, confidence, history || [], quant)}
                 className="w-full py-3 rounded-xl btn-ghost flex items-center justify-center gap-2 group/btn"
             >
                 <span className="text-xs font-semibold uppercase tracking-widest">Deep Dive</span>
