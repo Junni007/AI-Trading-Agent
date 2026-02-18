@@ -13,9 +13,21 @@ from typing import List
 from fastapi import FastAPI, Depends, HTTPException, Request, Security
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware # Assuming this import is needed for RateLimitMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+import uvicorn
 
-# ... (Imports)
+from src.brain.hybrid import HybridBrain
+from src.simulation.engine import SimulationEngine
+from src.api.websocket import router as ws_router, broadcast_update
+from src.api.schemas import (
+    HealthResponse, HomeResponse, ScanTriggerResponse,
+    ResultsResponse, ResetResponse, SettingsPayload,
+)
+
+# Configure Logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("API")
+START_TIME = time.time()
 
 # Simple Rate Limiting Middleware
 class RateLimitMiddleware(BaseHTTPMiddleware):
