@@ -98,10 +98,13 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 # CORS — restricted to configured origins (Step 2.1)
-CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:3000,http://localhost:8000").split(",")
+# Robust parsing: handle commas, spaces, and accidental quotes
+headers_env = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:3000,http://localhost:8000")
+CORS_ORIGINS = [origin.strip().strip('"').strip("'") for origin in headers_env.split(",") if origin.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[origin.strip() for origin in CORS_ORIGINS],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
