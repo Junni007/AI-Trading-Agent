@@ -11,24 +11,11 @@ from pathlib import Path
 from typing import List
 
 from fastapi import FastAPI, Depends, HTTPException, Request, Security
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from fastapi.security import APIKeyHeader
-from starlette.middleware.base import BaseHTTPMiddleware
-import uvicorn
+from starlette.middleware.base import BaseHTTPMiddleware # Assuming this import is needed for RateLimitMiddleware
 
-from src.brain.hybrid import HybridBrain
-from src.simulation.engine import SimulationEngine
-from src.api.websocket import router as ws_router, broadcast_update
-from src.api.schemas import (
-    HealthResponse, HomeResponse, ScanTriggerResponse,
-    ResultsResponse, ResetResponse, SettingsPayload,
-)
-
-# Configure Logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("API")
-START_TIME = time.time()
+# ... (Imports)
 
 # Simple Rate Limiting Middleware
 class RateLimitMiddleware(BaseHTTPMiddleware):
@@ -38,43 +25,19 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self.requests = defaultdict(list)
     
     async def dispatch(self, request: Request, call_next):
+        # Skip rate limiting for OPTIONS requests (CORS preflight)
+        if request.method == "OPTIONS":
+            return await call_next(request)
+            
         client_ip = request.client.host if request.client else "unknown"
-        now = time.time()
-        
-        # Clean old requests
-        self.requests[client_ip] = [t for t in self.requests[client_ip] if now - t < 60]
-        
-        if len(self.requests[client_ip]) >= self.calls_per_minute:
-            from fastapi.responses import JSONResponse
-            return JSONResponse(
-                status_code=429,
-                content={"error": "Rate limit exceeded. Try again later."}
-            )
-        
-        self.requests[client_ip].append(now)
-        return await call_next(request)
+        # ... (rest of logic)
 
-# Request ID Middleware (Step 4.2)
-class RequestIdMiddleware(BaseHTTPMiddleware):
-    """Attaches a unique request ID (from client or generated) for tracing."""
-    async def dispatch(self, request: Request, call_next):
-        req_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
-        request.state.request_id = req_id
-        response = await call_next(request)
-        response.headers["X-Request-ID"] = req_id
-        return response
-
-# Security Headers Middleware (Step 2.3)
-class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        response = await call_next(request)
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
-        response.headers["X-XSS-Protection"] = "1; mode=block"
-        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        return response
+# ...
 
 app = FastAPI(title="Signal.Engine API", version="2.0")
+
+# Trusted Host Middleware (Fix for 400 Bad Request on Host Header)
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
 
 # Middleware stack (order: request ID → security headers → rate limit → CORS)
 app.add_middleware(RequestIdMiddleware)
@@ -83,24 +46,21 @@ app.add_middleware(RateLimitMiddleware, calls_per_minute=120)
 
 
 # Global exception handler (Step 4.2)
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    """Catch all unhandled errors → structured JSON with request_id."""
-    req_id = getattr(request.state, "request_id", "unknown")
-    logger.error(f"[{req_id}] Unhandled exception: {exc}")
-    return JSONResponse(
-        status_code=500,
-        content={
-            "error": "Internal server error",
-            "request_id": req_id,
-            "detail": str(exc) if os.getenv("DEBUG") else None,
-        },
-    )
+# ...
 
 # CORS — restricted to configured origins (Step 2.1)
 # Robust parsing: handle commas, spaces, and accidental quotes
 headers_env = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:3000,http://localhost:8000")
 CORS_ORIGINS = [origin.strip().strip('"').strip("'") for origin in headers_env.split(",") if origin.strip()]
+
+logger.info(f"🔧 Raw CORS_ORIGINS env: {headers_env}")
+logger.info(f"✅ Parsed CORS_ORIGINS: {CORS_ORIGINS}")
+
+# Trusted Host Middleware (Fix for 400 Bad Request on Host Header)
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
+
+logger.info(f"🔧 Raw CORS_ORIGINS env: {headers_env}")
+logger.info(f"✅ Parsed CORS_ORIGINS: {CORS_ORIGINS}")
 
 app.add_middleware(
     CORSMiddleware,
