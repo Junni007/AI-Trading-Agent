@@ -34,7 +34,7 @@ final_tda_agent.pth
 wandb/
 
 # Data
-data/
+/data/
 *.csv
 !src/nifty500.csv
 *.xlsx
