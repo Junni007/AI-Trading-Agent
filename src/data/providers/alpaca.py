@@ -96,7 +96,23 @@ class AlpacaProvider(DataProvider):
             
             # Convert to DataFrame
             df = bars[ticker].df.reset_index()
-            df.columns = ['Timestamp', 'Open', 'High', 'Low', 'Close', 'Volume', 'TradeCount', 'VWAP']
+            # Explicit column renaming for robustness
+            rename_map = {
+                'timestamp': 'Timestamp',
+                'open': 'Open',
+                'high': 'High', 
+                'low': 'Low', 
+                'close': 'Close', 
+                'volume': 'Volume'
+            }
+            
+            # Check for required columns
+            required_cols = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
+            if not all(col in df.columns for col in required_cols):
+                logger.error(f"Alpaca data missing columns. Found: {df.columns}")
+                return None
+                
+            df = df.rename(columns=rename_map)
             df = df.set_index('Timestamp')
             df = df[['Open', 'High', 'Low', 'Close', 'Volume']]
             
@@ -130,7 +146,15 @@ class AlpacaProvider(DataProvider):
             for ticker in tickers:
                 if ticker in bars:
                     df = bars[ticker].df.reset_index()
-                    df.columns = ['Timestamp', 'Open', 'High', 'Low', 'Close', 'Volume', 'TradeCount', 'VWAP']
+                    rename_map = {
+                        'timestamp': 'Timestamp',
+                        'open': 'Open',
+                        'high': 'High',
+                        'low': 'Low',
+                        'close': 'Close',
+                        'volume': 'Volume'
+                    }
+                    df = df.rename(columns=rename_map)
                     df = df.set_index('Timestamp')
                     df = df[['Open', 'High', 'Low', 'Close', 'Volume']]
                     result[ticker] = df
@@ -192,7 +216,7 @@ class AlpacaProvider(DataProvider):
     
     def supports_streaming(self) -> bool:
         """Alpaca supports WebSocket streaming."""
-        return self.api_key is not None
+        return bool(self.api_key and self.secret_key)
     
     def stream_bars(
         self,
@@ -200,8 +224,8 @@ class AlpacaProvider(DataProvider):
         callback: Callable[[str, dict], None]
     ) -> None:
         """Stream real-time bars via WebSocket."""
-        if not self.api_key:
-            raise ValueError("API key required for streaming")
+        if not self.api_key or not self.secret_key:
+            raise ValueError("API key and secret key required for streaming")
         
         self._stream = StockDataStream(
             api_key=self.api_key,

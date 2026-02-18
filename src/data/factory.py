@@ -3,7 +3,7 @@ Data Provider Factory.
 Returns the configured data provider based on settings.
 """
 import logging
-from typing import Union
+from typing import Union, Optional
 
 from src.config import settings
 from src.data.providers import DataProvider, YFinanceProvider, ALPACA_AVAILABLE
@@ -17,7 +17,9 @@ def get_data_provider() -> DataProvider:
     Uses DATA_PROVIDER setting to determine which provider to use.
     Falls back to yfinance if Alpaca is not available.
     """
-    provider_name = settings.DATA_PROVIDER.lower()
+    # Safely get provider name
+    raw_provider = getattr(settings, "DATA_PROVIDER", None)
+    provider_name = raw_provider.lower() if raw_provider else "yfinance"
     
     if provider_name == "alpaca":
         if not ALPACA_AVAILABLE:
@@ -40,7 +42,7 @@ def get_data_provider() -> DataProvider:
 
 
 # Singleton instance
-_provider: DataProvider = None
+_provider: Optional[DataProvider] = None
 
 def get_provider() -> DataProvider:
     """Get or create singleton provider instance."""

@@ -39,17 +39,26 @@ class YFinanceProvider(DataProvider):
     
     def _parse_interval(self, timeframe: str) -> str:
         """Convert standard timeframe to yfinance interval."""
+        if timeframe == '4h':
+            logger.warning("yfinance does not support '4h' directly. Approximating with '1h'.")
+            return '1h'
+
         mapping = {
             '1m': '1m',
             '5m': '5m',
             '15m': '15m',
             '30m': '30m',
             '1h': '1h',
-            '4h': '1h',  # yfinance doesn't have 4h, use 1h
+            # '4h' handled above
             '1d': '1d',
             '1w': '1wk',
         }
-        return mapping.get(timeframe, '1d')
+        
+        if timeframe not in mapping:
+            supported = list(mapping.keys()) + ['4h']
+            raise ValueError(f"Unsupported timeframe '{timeframe}'. Supported: {supported}")
+            
+        return mapping[timeframe]
     
     def get_bars(
         self,
@@ -62,8 +71,8 @@ class YFinanceProvider(DataProvider):
         try:
             df = yf.download(
                 tickers=ticker,
-                start=start.strftime('%Y-%m-%d'),
-                end=end.strftime('%Y-%m-%d'),
+                start=start.isoformat(),
+                end=end.isoformat(),
                 interval=self._parse_interval(timeframe),
                 progress=False,
                 auto_adjust=True
@@ -99,8 +108,8 @@ class YFinanceProvider(DataProvider):
         try:
             df = yf.download(
                 tickers=tickers,
-                start=start.strftime('%Y-%m-%d'),
-                end=end.strftime('%Y-%m-%d'),
+                start=start.isoformat(),
+                end=end.isoformat(),
                 interval=self._parse_interval(timeframe),
                 progress=False,
                 auto_adjust=True,
