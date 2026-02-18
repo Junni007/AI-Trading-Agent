@@ -94,29 +94,52 @@ class AlpacaProvider(DataProvider):
             if not bars or ticker not in bars:
                 return None
             
-            # Convert to DataFrame
-            df = bars[ticker].df.reset_index()
-            # Explicit column renaming for robustness
-            rename_map = {
-                'timestamp': 'Timestamp',
-                'open': 'Open',
-                'high': 'High', 
-                'low': 'Low', 
-                'close': 'Close', 
-                'volume': 'Volume'
-            }
+    def _transform_bars_df(self, df: pd.DataFrame) -> Optional[pd.DataFrame]:
+        """Transform Alpaca bars DataFrame to standard format."""
+        # Explicit column renaming for robustness
+        rename_map = {
+            'timestamp': 'Timestamp',
+            'open': 'Open',
+            'high': 'High', 
+            'low': 'Low', 
+            'close': 'Close', 
+            'volume': 'Volume'
+        }
+        
+        # Check for required columns
+        required_cols = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
+        if not all(col in df.columns for col in required_cols):
+            logger.error(f"Alpaca data missing columns. Found: {df.columns}")
+            return None
             
-            # Check for required columns
-            required_cols = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
-            if not all(col in df.columns for col in required_cols):
-                logger.error(f"Alpaca data missing columns. Found: {df.columns}")
+        df = df.rename(columns=rename_map)
+        df = df.set_index('Timestamp')
+        df = df[['Open', 'High', 'Low', 'Close', 'Volume']]
+        return df
+
+    def get_bars(
+        self,
+        ticker: str,
+        start: datetime,
+        end: datetime,
+        timeframe: str = '1d'
+    ) -> Optional[pd.DataFrame]:
+        """Fetch historical OHLCV bars for a single ticker."""
+        try:
+            request = StockBarsRequest(
+                symbol_or_symbols=ticker,
+                timeframe=self._parse_timeframe(timeframe),
+                start=start,
+                end=end
+            )
+            
+            bars = self.client.get_stock_bars(request)
+            
+            if not bars or ticker not in bars:
                 return None
-                
-            df = df.rename(columns=rename_map)
-            df = df.set_index('Timestamp')
-            df = df[['Open', 'High', 'Low', 'Close', 'Volume']]
             
-            return df
+            # Convert to DataFrame
+            return self._transform_bars_df(bars[ticker].df.reset_index())
             
         except Exception as e:
             logger.error(f"Alpaca get_bars failed for {ticker}: {e}")
@@ -145,19 +168,9 @@ class AlpacaProvider(DataProvider):
             
             for ticker in tickers:
                 if ticker in bars:
-                    df = bars[ticker].df.reset_index()
-                    rename_map = {
-                        'timestamp': 'Timestamp',
-                        'open': 'Open',
-                        'high': 'High',
-                        'low': 'Low',
-                        'close': 'Close',
-                        'volume': 'Volume'
-                    }
-                    df = df.rename(columns=rename_map)
-                    df = df.set_index('Timestamp')
-                    df = df[['Open', 'High', 'Low', 'Close', 'Volume']]
-                    result[ticker] = df
+                    df = self._transform_bars_df(bars[ticker].df.reset_index())
+                    if df is not None:
+                        result[ticker] = df
                     
         except Exception as e:
             logger.error(f"Alpaca batch request failed: {e}")
@@ -243,7 +256,15 @@ class AlpacaProvider(DataProvider):
             })
         
         self._stream.subscribe_bars(bar_handler, *tickers)
-        self._stream.run()
+        
+        try:
+            # run() blocks forever
+            self._stream.run()
+        except Exception as e:
+            logger.error(f"Streaming error: {e}")
+            raise
+        finally:
+            self.stop_streaming()
     
     def stop_streaming(self):
         """Stop the WebSocket stream."""

@@ -40,8 +40,7 @@ class YFinanceProvider(DataProvider):
     def _parse_interval(self, timeframe: str) -> str:
         """Convert standard timeframe to yfinance interval."""
         if timeframe == '4h':
-            logger.warning("yfinance does not support '4h' directly. Approximating with '1h'.")
-            return '1h'
+            raise ValueError("yfinance does not support '4h'. Please aggregate '1h' data manually.")
 
         mapping = {
             '1m': '1m',
@@ -49,17 +48,16 @@ class YFinanceProvider(DataProvider):
             '15m': '15m',
             '30m': '30m',
             '1h': '1h',
-            # '4h' handled above
             '1d': '1d',
             '1w': '1wk',
         }
         
         if timeframe not in mapping:
-            supported = list(mapping.keys()) + ['4h']
+            supported = list(mapping.keys())
             raise ValueError(f"Unsupported timeframe '{timeframe}'. Supported: {supported}")
             
         return mapping[timeframe]
-    
+
     def get_bars(
         self,
         ticker: str,
@@ -104,6 +102,7 @@ class YFinanceProvider(DataProvider):
     ) -> dict:
         """Fetch historical bars for multiple tickers."""
         result = {}
+        logged_unexpected_format = False
         
         try:
             df = yf.download(
@@ -129,6 +128,9 @@ class YFinanceProvider(DataProvider):
                     elif not is_multi and len(tickers) == 1:
                         ticker_df = df.copy()
                     else:
+                        if not logged_unexpected_format and len(tickers) > 1:
+                            logger.warning(f"Unexpected yfinance batch format for {len(tickers)} tickers. Columns: {df.columns}")
+                            logged_unexpected_format = True
                         continue
                     
                     ticker_df = ticker_df[['Open', 'High', 'Low', 'Close', 'Volume']]
@@ -170,16 +172,17 @@ class YFinanceProvider(DataProvider):
     
     def get_latest_quote(self, ticker: str) -> Optional[dict]:
         """Get latest quote (limited in yfinance)."""
+        from datetime import timezone
         try:
             stock = yf.Ticker(ticker)
             info = stock.info
             
             return {
-                'bid': info.get('bid', 0),
-                'ask': info.get('ask', 0),
-                'bid_size': info.get('bidSize', 0),
-                'ask_size': info.get('askSize', 0),
-                'timestamp': datetime.now()
+                'bid': info.get('bid'),
+                'ask': info.get('ask'),
+                'bid_size': info.get('bidSize'),
+                'ask_size': info.get('askSize'),
+                'timestamp': datetime.now(timezone.utc)
             }
             
         except Exception as e:

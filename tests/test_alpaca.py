@@ -6,8 +6,6 @@ Works with both pytest and direct execution.
 from datetime import datetime, timedelta
 import os
 import sys
-import sys
-import os
 
 # Ensure project root is in sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))

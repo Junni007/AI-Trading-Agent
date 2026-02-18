@@ -29,9 +29,9 @@ def get_data_provider() -> DataProvider:
         try:
             from src.data.providers import AlpacaProvider
             return AlpacaProvider(
-                api_key=settings.ALPACA_API_KEY or None,
-                secret_key=settings.ALPACA_SECRET_KEY or None,
-                paper=settings.ALPACA_PAPER
+                api_key=getattr(settings, 'ALPACA_API_KEY', None),
+                secret_key=getattr(settings, 'ALPACA_SECRET_KEY', None),
+                paper=getattr(settings, 'ALPACA_PAPER', True)
             )
         except Exception as e:
             logger.error(f"Failed to initialize Alpaca: {e}. Falling back to yfinance.")
