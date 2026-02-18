@@ -73,27 +73,6 @@ class AlpacaProvider(DataProvider):
         }
         return mapping.get(timeframe, TimeFrame(1, TimeFrameUnit.Day))
     
-    def get_bars(
-        self,
-        ticker: str,
-        start: datetime,
-        end: datetime,
-        timeframe: str = '1d'
-    ) -> Optional[pd.DataFrame]:
-        """Fetch historical OHLCV bars for a single ticker."""
-        try:
-            request = StockBarsRequest(
-                symbol_or_symbols=ticker,
-                timeframe=self._parse_timeframe(timeframe),
-                start=start,
-                end=end
-            )
-            
-            bars = self.client.get_stock_bars(request)
-            
-            if not bars or ticker not in bars:
-                return None
-            
     def _transform_bars_df(self, df: pd.DataFrame) -> Optional[pd.DataFrame]:
         """Transform Alpaca bars DataFrame to standard format."""
         # Explicit column renaming for robustness
