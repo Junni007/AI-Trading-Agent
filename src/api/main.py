@@ -1,18 +1,34 @@
-from fastapi import FastAPI, BackgroundTasks, Request
-from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware
-import uvicorn
+import os
+import json
 import logging
 import asyncio
 import time
+import threading
+import uuid
 from collections import defaultdict
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import List
+
+from fastapi import FastAPI, Depends, HTTPException, Request, Security
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.security import APIKeyHeader
+from starlette.middleware.base import BaseHTTPMiddleware
+import uvicorn
+
 from src.brain.hybrid import HybridBrain
 from src.simulation.engine import SimulationEngine
 from src.api.websocket import router as ws_router, broadcast_update
+from src.api.schemas import (
+    HealthResponse, HomeResponse, ScanTriggerResponse,
+    ResultsResponse, ResetResponse, SettingsPayload,
+)
 
 # Configure Logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("API")
+START_TIME = time.time()
 
 # Simple Rate Limiting Middleware
 class RateLimitMiddleware(BaseHTTPMiddleware):
@@ -38,19 +54,70 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self.requests[client_ip].append(now)
         return await call_next(request)
 
+# Request ID Middleware (Step 4.2)
+class RequestIdMiddleware(BaseHTTPMiddleware):
+    """Attaches a unique request ID (from client or generated) for tracing."""
+    async def dispatch(self, request: Request, call_next):
+        req_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
+        request.state.request_id = req_id
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = req_id
+        return response
+
+# Security Headers Middleware (Step 2.3)
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        return response
+
 app = FastAPI(title="Signal.Engine API", version="2.0")
 
-# Add Rate Limiting
+# Middleware stack (order: request ID → security headers → rate limit → CORS)
+app.add_middleware(RequestIdMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RateLimitMiddleware, calls_per_minute=120)
 
-# Allow CORS for Frontend
+
+# Global exception handler (Step 4.2)
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Catch all unhandled errors → structured JSON with request_id."""
+    req_id = getattr(request.state, "request_id", "unknown")
+    logger.error(f"[{req_id}] Unhandled exception: {exc}")
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "Internal server error",
+            "request_id": req_id,
+            "detail": str(exc) if os.getenv("DEBUG") else None,
+        },
+    )
+
+# CORS — restricted to configured origins (Step 2.1)
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[origin.strip() for origin in CORS_ORIGINS],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# API Key Authentication (Step 2.2)
+# When API_KEY env is not set, auth is disabled (dev mode)
+API_KEY = os.getenv("API_KEY")
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+async def verify_api_key(key: str = Security(api_key_header)):
+    """Validate API key. Disabled when API_KEY env var is not set."""
+    if not API_KEY:
+        return  # Dev mode — no auth required
+    if key != API_KEY:
+        raise HTTPException(status_code=403, detail="Invalid or missing API key")
 
 # Mount WebSocket router
 app.include_router(ws_router)
@@ -59,90 +126,155 @@ app.include_router(ws_router)
 brain = HybridBrain()
 sim_engine = SimulationEngine()
 
-@app.get("/")
+@app.get("/", response_model=HomeResponse)
 def home():
     return {"status": "Online", "message": "Sniper Agent is Ready."}
 
-# Global State for Async Scanning
-LATEST_DECISIONS = []
-LATEST_LOGS = []
-IS_SCANNING = False
+@app.get("/api/health", response_model=HealthResponse)
+def health_check():
+    """Health check endpoint for monitoring and Settings page connectivity."""
+    return {
+        "status": "healthy",
+        "version": app.version,
+        "uptime": round(time.time() - START_TIME, 1),
+    }
 
-def background_scan():
-    global LATEST_DECISIONS, LATEST_LOGS, IS_SCANNING
+
+# ─── Thread-Safe State Store (Step 3.1) ──────────────────────────────────────
+
+@dataclass
+class ScanState:
+    """Thread-safe container for scan results. All access goes through lock."""
+    decisions: List = field(default_factory=list)
+    logs: List = field(default_factory=list)
+    is_scanning: bool = False
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+
+    def update(self, decisions: list, logs: list):
+        with self._lock:
+            self.decisions = decisions
+            self.logs = logs
+
+    def read(self):
+        with self._lock:
+            return self.decisions.copy(), self.logs.copy(), self.is_scanning
+
+    def set_scanning(self, value: bool):
+        with self._lock:
+            self.is_scanning = value
+
+
+scan_state = ScanState()
+
+
+# ─── Async Background Scan (Step 3.2) ────────────────────────────────────────
+
+async def background_scan():
+    """Run brain.think() in a thread pool and broadcast results via WS."""
     try:
         logger.info("🧠 Brain started thinking...")
-        decisions = brain.think()
-        
-        # Determine Regime (Simple Heuristic: majority of income votes)
-        # In a real system, the Brain would output a global 'regime' field
+        # Off-load CPU-heavy work to thread pool
+        decisions = await asyncio.to_thread(brain.think)
+
+        # Determine Regime (Simple Heuristic)
         regime = "NEUTRAL"
         vol_count = sum(1 for d in decisions if "High Volatility" in str(d.get('Rational', [])))
         if vol_count > len(decisions) * 0.3:
             regime = "HIGH_VOLATILITY"
-        
-        # RL Simulation Tick (Auto-Run)
+
+        # RL Simulation Tick
         logs = sim_engine.process_tick(decisions, regime=regime)
-        
+
         # Sort by Confidence
         decisions.sort(key=lambda x: x['Confidence'], reverse=True)
-        
-        # Update Global State
-        LATEST_DECISIONS = decisions
-        LATEST_LOGS = logs
+
+        # Thread-safe update
+        scan_state.update(decisions, logs)
         logger.info("✅ Brain finished thinking.")
-        
-        # Broadcast to WebSocket clients
+
+        # Broadcast to WebSocket clients (direct await — no more run_until_complete)
         try:
-            asyncio.get_event_loop().run_until_complete(
-                broadcast_update({
-                    "type": "scan_complete",
-                    "data": decisions,
-                    "simulation": sim_engine.get_portfolio(),
-                    "logs": logs
-                })
-            )
+            await broadcast_update({
+                "type": "scan_complete",
+                "data": decisions,
+                "simulation": sim_engine.get_portfolio(),
+                "logs": logs
+            })
         except Exception as ws_err:
             logger.warning(f"WebSocket broadcast failed: {ws_err}")
     except Exception as e:
         logger.error(f"Scan failed: {e}")
     finally:
-        IS_SCANNING = False
+        scan_state.set_scanning(False)
 
-@app.get("/api/scan")
-def run_scan(background_tasks: BackgroundTasks):
-    """
-    Triggers the Hybrid Brain to think in the background.
-    """
-    global IS_SCANNING
-    if IS_SCANNING:
+
+@app.get("/api/scan", dependencies=[Depends(verify_api_key)], response_model=ScanTriggerResponse)
+async def run_scan():
+    """Triggers the Hybrid Brain to think in the background."""
+    if scan_state.is_scanning:
         return {"status": "busy", "message": "Brain is already thinking."}
-    
-    IS_SCANNING = True
-    background_tasks.add_task(background_scan)
+
+    scan_state.set_scanning(True)
+    asyncio.create_task(background_scan())
     return {"status": "started", "message": "Scan triggered in background."}
 
-@app.get("/api/results")
+@app.get("/api/results", dependencies=[Depends(verify_api_key)], response_model=ResultsResponse)
 def get_results():
-    """
-    Returns the latest available scan results.
-    """
+    """Returns the latest available scan results."""
+    decisions, logs, is_thinking = scan_state.read()
     return {
-        "status": "success", 
-        "data": LATEST_DECISIONS, 
+        "status": "success",
+        "data": decisions,
         "simulation": sim_engine.get_portfolio(),
-        "logs": LATEST_LOGS,
-        "is_thinking": IS_SCANNING
+        "logs": logs,
+        "is_thinking": is_thinking
     }
 
-@app.get("/api/simulation/state")
+@app.get("/api/simulation/state", dependencies=[Depends(verify_api_key)])
 def get_sim_state():
+    """Returns the current simulation portfolio state."""
     return sim_engine.get_portfolio()
 
-@app.post("/api/simulation/reset")
+@app.post("/api/simulation/reset", dependencies=[Depends(verify_api_key)], response_model=ResetResponse)
 def reset_sim():
+    """Resets the simulation to initial state."""
     sim_engine.reset()
     return {"status": "reset", "state": sim_engine.get_portfolio()}
+
+# ─── Settings Sync (Step 3.3) ────────────────────────────────────────────────
+
+SETTINGS_FILE = Path(__file__).parent.parent.parent / "settings.json"
+DEFAULT_SETTINGS = SettingsPayload()
+
+
+def _load_settings() -> dict:
+    """Load settings from JSON file, falling back to defaults."""
+    try:
+        if SETTINGS_FILE.exists():
+            return json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as e:
+        logger.warning(f"Failed to load settings: {e}")
+    return DEFAULT_SETTINGS.model_dump()
+
+
+def _save_settings(data: dict) -> None:
+    """Persist settings to JSON file."""
+    SETTINGS_FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+@app.get("/api/settings", dependencies=[Depends(verify_api_key)])
+def get_settings():
+    """Returns stored settings."""
+    return _load_settings()
+
+
+@app.post("/api/settings", dependencies=[Depends(verify_api_key)])
+def save_settings(payload: SettingsPayload):
+    """Save user settings to disk."""
+    data = payload.model_dump()
+    _save_settings(data)
+    return {"status": "saved", "settings": data}
+
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

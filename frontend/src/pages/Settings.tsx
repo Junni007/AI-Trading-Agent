@@ -49,14 +49,25 @@ export const Settings = () => {
     const [apiLatency, setApiLatency] = useState<number | null>(null);
     const [confirmReset, setConfirmReset] = useState(false);
 
-    // Load settings from localStorage
+    // Load settings: backend first, then localStorage fallback
     useEffect(() => {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) {
+        const loadSettings = async () => {
             try {
-                setSettings(JSON.parse(saved));
-            } catch { /* use defaults */ }
-        }
+                const res = await api.get('/api/settings');
+                if (res.data && typeof res.data === 'object') {
+                    setSettings(prev => ({ ...prev, ...res.data }));
+                    return;
+                }
+            } catch { /* Backend unavailable — fall back to localStorage */ }
+
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                try {
+                    setSettings(JSON.parse(saved));
+                } catch { /* use defaults */ }
+            }
+        };
+        loadSettings();
     }, []);
 
     // Check API connectivity
@@ -83,13 +94,17 @@ export const Settings = () => {
         setHasChanges(true);
     };
 
-    const handleSave = () => {
+    const handleSave = async () => {
+        // Dual-write: backend + localStorage
         localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+        try {
+            await api.post('/api/settings', settings);
+        } catch { /* localStorage still works as fallback */ }
         setHasChanges(false);
         addToast('success', 'Settings saved successfully');
     };
 
-    const handleReset = () => {
+    const handleReset = async () => {
         if (!confirmReset) {
             setConfirmReset(true);
             setTimeout(() => setConfirmReset(false), 3000);
@@ -98,6 +113,9 @@ export const Settings = () => {
         setSettings(DEFAULT_SETTINGS);
         localStorage.removeItem(STORAGE_KEY);
         localStorage.removeItem('alert_thresholds');
+        try {
+            await api.post('/api/settings', DEFAULT_SETTINGS);
+        } catch { /* localStorage still cleared */ }
         setHasChanges(false);
         setConfirmReset(false);
         addToast('info', 'All settings reset to defaults');

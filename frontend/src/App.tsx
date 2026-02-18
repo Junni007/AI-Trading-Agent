@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import api from './services/api';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { CustomCursor } from './components/CustomCursor';
@@ -76,23 +76,34 @@ function AppContent() {
             });
     }, []);
 
-    // Real-Time Loop
+    // Keep loading state accessible inside interval without stale closure
+    const loadingRef = useRef(loading);
+    loadingRef.current = loading;
+
+    // Stable real-time scan loop — interval is NOT recreated when loading changes
     useEffect(() => {
-        let interval: any;
-        if (isAuto) {
-            interval = setInterval(() => {
-                if (!loading) runScan(true);
-            }, 2000);
-        }
+        if (!isAuto) return;
+        const interval: ReturnType<typeof setInterval> = setInterval(() => {
+            if (!loadingRef.current) runScan(true);
+        }, 2000);
         return () => clearInterval(interval);
-    }, [isAuto, loading]);
+    }, [isAuto]);
 
     // Keyboard shortcuts
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             // Escape closes modal
-            if (e.key === 'Escape' && isModalOpen) {
-                setIsModalOpen(false);
+            if (e.key === 'Escape') {
+                if (isModalOpen) setIsModalOpen(false);
+            }
+            // Ctrl+B toggles Auto/Brain mode
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+                e.preventDefault();
+                setIsAuto(prev => {
+                    const next = !prev;
+                    addToast('info', next ? 'Auto-Pilot Engaged' : 'Manual Control Active');
+                    return next;
+                });
             }
         };
         document.addEventListener('keydown', handleKeyDown);

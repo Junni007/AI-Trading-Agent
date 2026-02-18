@@ -14,6 +14,9 @@ pip-delete-this-directory.txt
 .pytest_cache/
 .shared/
 .lightning_logs/
+.gsd
+.gemini
+adapters
 
 
 # VS Code
@@ -46,6 +49,10 @@ frontend/.env.local
 frontend/npm-debug.log*
 frontend/yarn-debug.log*
 frontend/yarn-error.log*
+frontend/dist/
+.coverage
+htmlcov/
+.pytest_cache/
 
 # Mac / Windows
 .DS_Store

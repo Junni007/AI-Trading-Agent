@@ -22,7 +22,6 @@ interface DashboardProps {
 }
 
 
-
 export const Dashboard = ({ data, loading, marketMood, lastUpdated, simState, onResetSim, onScan, isAuto, isLocked, onDetails, logs }: DashboardProps) => {
     const [filter, setFilter] = useState<'all' | 'opportunities' | 'watch'>('all');
     const [searchQuery, setSearchQuery] = useState('');
@@ -98,7 +97,6 @@ export const Dashboard = ({ data, loading, marketMood, lastUpdated, simState, on
                 </div>
             )}
 
-            {/* Skeleton Loading State */}
             {isInitialLoad ? (
                 <div className="w-full max-w-[1400px] px-4">
                     <motion.div
@@ -122,7 +120,7 @@ export const Dashboard = ({ data, loading, marketMood, lastUpdated, simState, on
                         ))}
                     </div>
                 </div>
-            ) : (
+            ) : filteredData.length > 0 ? (
                 <motion.div
                     layout
                     className="w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 py-4 px-4 max-w-[1400px]"
@@ -143,7 +141,7 @@ export const Dashboard = ({ data, loading, marketMood, lastUpdated, simState, on
                         ))}
                     </AnimatePresence>
                 </motion.div>
-            )}
+            ) : null}
 
             {/* Empty State — No data at all (not scanning) */}
             {!loading && data.length === 0 && (
@@ -161,11 +159,18 @@ export const Dashboard = ({ data, loading, marketMood, lastUpdated, simState, on
                 </motion.div>
             )}
 
-            {/* Filtered Empty State */}
+            {/* Filtered Empty State — data exists but filters hide everything */}
             {!loading && filteredData.length === 0 && data.length > 0 && (
-                <div className="py-20 text-smoke text-lg font-body">
-                    No signals match your filter.
-                </div>
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                >
+                    <EmptyState
+                        icon={Search}
+                        title="No Matches"
+                        description="No signals match your current filter or search query. Try adjusting your criteria."
+                    />
+                </motion.div>
             )}
         </div>
     );

@@ -28,6 +28,9 @@ export const Signals = ({ data, loading = false, onDetails }: SignalsProps) => {
     const [filterTab, setFilterTab] = useState<FilterTab>('all');
     const [searchQuery, setSearchQuery] = useState('');
 
+    // Only show skeletons on very first load — not during silent background scans
+    const isInitialLoad = loading && data.length === 0;
+
     const handleSort = (key: SortKey) => {
         if (sortKey === key) {
             setSortDir(prev => prev === 'asc' ? 'desc' : 'asc');
@@ -164,7 +167,7 @@ export const Signals = ({ data, loading = false, onDetails }: SignalsProps) => {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-graphite/50 text-sm font-body">
-                        {loading ? (
+                        {isInitialLoad ? (
                             Array.from({ length: 5 }).map((_, i) => (
                                 <tr key={i} className="animate-pulse">
                                     <td className="px-6 py-4"><Skeleton className="w-24 h-5" /></td>
@@ -240,7 +243,7 @@ export const Signals = ({ data, loading = false, onDetails }: SignalsProps) => {
             {/* Mobile Card View */}
             <div className="md:hidden space-y-3">
                 <AnimatePresence mode="popLayout">
-                    {loading ? (
+                    {isInitialLoad ? (
                         Array.from({ length: 3 }).map((_, i) => (
                             <motion.div
                                 key={i}

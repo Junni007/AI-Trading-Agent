@@ -67,13 +67,27 @@ export const ThinkingNode: React.FC<ThinkingNodeProps> = ({ ticker, regime, acti
             transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
             className={`group relative flex flex-col justify-between panel p-5 cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl ${signal.glowClass}`}
         >
+            {/* Thinking/Scanning Animation */}
+            <motion.div
+                className={`absolute inset-0 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-500`}
+            >
+                <div className={`absolute inset-0 bg-gradient-to-r from-transparent via-${signal.accentBgClass.replace('bg-', '')}/10 to-transparent skew-x-12 translate-x-[-100%] animate-shimmer`} />
+            </motion.div>
+
             {/* High Confidence Indicator */}
             {confidence >= 0.8 && (
-                <motion.div
-                    className={`absolute top-3 right-3 w-2 h-2 rounded-full ${signal.accentBgClass}`}
-                    animate={{ opacity: [0.5, 1, 0.5] }}
-                    transition={{ repeat: Infinity, duration: 2 }}
-                />
+                <div className="absolute top-3 right-3 flex items-center justify-center">
+                    <motion.div
+                        className={`w-2 h-2 rounded-full ${signal.accentBgClass}`}
+                        animate={{ scale: [1, 1.5, 1], opacity: [0.5, 1, 0.5] }}
+                        transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+                    />
+                    <motion.div
+                        className={`absolute inset-0 w-2 h-2 rounded-full ${signal.accentBgClass}`}
+                        animate={{ scale: [1, 3], opacity: [0.5, 0] }}
+                        transition={{ repeat: Infinity, duration: 2, ease: "easeOut" }}
+                    />
+                </div>
             )}
 
             {/* Header */}

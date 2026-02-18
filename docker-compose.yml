@@ -1,0 +1,27 @@
+services:
+  backend:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: signal_engine_backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./src:/app/src  # Hot reload for dev
+      - ./logs:/app/logs
+      - ./simulation_state.json:/app/simulation_state.json
+      - ./settings.json:/app/settings.json
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: signal_engine_frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
