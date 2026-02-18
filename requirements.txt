@@ -4,7 +4,7 @@ python-multipart
 pandas
 numpy
 ta
-pytorch-lightning
+yfinance
 matplotlib
 scikit-learn
 optuna
