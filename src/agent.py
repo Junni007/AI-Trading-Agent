@@ -3,13 +3,23 @@ Signal.Engine - PPO Agent
 Enhanced TradingAgent with better architecture for GPU utilization.
 """
 import gymnasium as gym
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-import pytorch_lightning as pl
-from torch.distributions import Categorical
 import numpy as np
+
+try:
+    import torch
+    import torch.nn as nn
+    import torch.nn.functional as F
+    import torch.optim as optim
+    import pytorch_lightning as pl
+    from torch.distributions import Categorical
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+    # Mock classes to prevent import errors in lightweight mode
+    class nn:
+        Module = object
+    class pl:
+        LightningModule = object
 
 
 class ActorCritic(nn.Module):

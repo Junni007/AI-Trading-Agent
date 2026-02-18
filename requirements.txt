@@ -3,11 +3,8 @@ uvicorn
 python-multipart
 pandas
 numpy
-yfinance
 ta
-torch
 pytorch-lightning
-lightning
 matplotlib
 scikit-learn
 optuna
@@ -21,4 +18,3 @@ httpx
 websockets
 alpaca-py
 python-dotenv
-

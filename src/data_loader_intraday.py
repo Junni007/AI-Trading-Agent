@@ -4,6 +4,11 @@ import numpy as np
 import logging
 import time
 from typing import Optional, Dict
+from datetime import datetime, timedelta
+from alpaca.data.historical import StockHistoricalDataClient
+from alpaca.data.requests import StockBarsRequest
+from alpaca.data.timeframe import TimeFrame
+from src.config import settings
 
 # Configure Logger
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -12,32 +17,114 @@ logger = logging.getLogger('IntradayLoader')
 class IntradayDataLoader:
     """
     Robust Data Loader for Intraday (15m, 5m, 1m) data.
-    Handles yfinance limitations (60-day max for <1d intervals).
+    Primary: Alpaca API (Faster, Reliable).
+    Fallback: yfinance (Backup).
     """
     
     def __init__(self):
         self.cache = {}
+        self.alpaca_client = None
+        
+        if settings.ALPACA_API_KEY and settings.ALPACA_SECRET_KEY:
+            try:
+                self.alpaca_client = StockHistoricalDataClient(
+                    settings.ALPACA_API_KEY,
+                    settings.ALPACA_SECRET_KEY
+                )
+                logger.info("✅ Alpaca Client Initialized")
+            except Exception as e:
+                logger.error(f"❌ Failed to init Alpaca Client: {e}")
+        else:
+            logger.warning("⚠️ Alpaca Credentials missing. Using yfinance fallback.")
 
     def fetch_data(self, ticker: str, interval: str = '15m', period: str = '59d') -> Optional[pd.DataFrame]:
         """
         Fetches intraday data for a single ticker.
-        
-        Args:
-            ticker: Symbol (e.g., 'AAPL', 'NVDA')
-            interval: '15m', '5m', '1h' (Default: '15m')
-            period: '59d' (Max for 15m is 60d, use 59 for safety)
-            
-        Returns:
-            pd.DataFrame or None if failed/empty.
         """
+        # Try Alpaca First
+        if self.alpaca_client and settings.DATA_PROVIDER == "alpaca":
+            df = self._fetch_alpaca(ticker, interval)
+            if df is not None and not df.empty:
+                return df
+            logger.warning(f"Alpaca fetch failed for {ticker}. Falling back to yfinance.")
+            
+        # Fallback to yfinance
+        return self._fetch_yfinance(ticker, interval, period)
+
+    def _fetch_alpaca(self, ticker: str, interval: str) -> Optional[pd.DataFrame]:
+        try:
+            # Map interval string to TimeFrame
+            tf_map = {'1m': TimeFrame.Minute, '15m': TimeFrame.Minute, '1h': TimeFrame.Hour, '1d': TimeFrame.Day}
+            # Note: Alpaca '15m' request needs custom handling or just fetch Minutes and resample?
+            # Alpaca SDK supports TimeFrame(15, TimeFrameUnit.Minute) but simple mapping here:
+            # For simplicity in this MVP, we might need to fetch 1Min and resample if 15m not directly supported by enum?
+            # Actually Alpaca allows arbitrary Multi-minute.
+            
+            # Let's use 15Min specific constructor if available or just fallback to 1Min and resample.
+            # SDK `TimeFrame.Minute` is 1Min.
+            # We will fetch 1Min bars and resample to 15Min to be robust, OR check SDK docs.
+            # Standard SDK usage: TimeFrame(15, TimeFrameUnit.Minute)
+            
+            # Simplified for now: Fetch days of data
+            start_date = datetime.now() - timedelta(days=5 if interval=='1m' else 60)
+            
+            # Correct TimeFrame construction for 15m
+            from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
+            if interval == '15m':
+                tf = TimeFrame(15, TimeFrameUnit.Minute)
+            elif interval == '5m':
+                tf = TimeFrame(5, TimeFrameUnit.Minute)
+            elif interval == '1h':
+                tf = TimeFrame.Hour
+            else:
+                tf = TimeFrame.Minute # Default 1m
+
+            request_params = StockBarsRequest(
+                symbol_or_symbols=ticker,
+                timeframe=tf,
+                start=start_date,
+                limit=10000, 
+                adjustment='all',
+                feed='iex'  # 'sip' (pro) or 'iex' (free-ish)
+            )
+
+            bars = self.alpaca_client.get_stock_bars(request_params)
+            
+            # Convert to DataFrame
+            df = bars.df
+            
+            if df.empty: return None
+            
+            # Reset index to get 'timestamp' as column, or handle MultiIndex (symbol, timestamp)
+            # Alpaca returns MultiIndex [symbol, timestamp]
+            df = df.reset_index(level=0, drop=True) # Drop symbol level
+            
+            # Rename columns to standard specific case (Open, High, Low, Close, Volume)
+            # Alpaca columns are lowercase: open, high, low, close, volume
+            df.rename(columns={
+                'open': 'Open',
+                'high': 'High',
+                'low': 'Low',
+                'close': 'Close',
+                'volume': 'Volume'
+            }, inplace=True)
+            
+            # Ensure proper timezone (remove tz for compatibility or keep?)
+            # yfinance is usually tz-naive or local. Alpaca is UTC.
+            # Let's allow UTC but ensure datetime index.
+            
+            return df[['Open', 'High', 'Low', 'Close', 'Volume']]
+
+        except Exception as e:
+            logger.error(f"Alpaca Error: {e}")
+            return None
+
+    def _fetch_yfinance(self, ticker: str, interval: str, period: str) -> Optional[pd.DataFrame]:
+        """Legacy yfinance fetcher (Backup via yfinance)"""
         try:
             # Respect yfinance constraints
-            # 1m = max 7 days
             if interval == '1m' and int(period[:-1]) > 7:
-                logger.warning(f"Period {period} too long for 1m data. truncating to 7d.")
                 period = '7d'
-                
-            logger.info(f"Fetching {interval} data for {ticker} (Period: {period})...")
             
             # Download
             df = yf.download(
@@ -45,98 +132,81 @@ class IntradayDataLoader:
                 period=period,
                 interval=interval,
                 progress=False,
-                threads=False # Single thread to avoid rate limits on loop
+                threads=False
             )
             
-            if df is None or df.empty:
-                logger.warning(f"No data found for {ticker}")
-                return None
-                
-            # Formatting
-            # Ensure index is Datetime
-            if not isinstance(df.index, pd.DatetimeIndex):
-                df.index = pd.to_datetime(df.index)
+            if df is None or df.empty: return None
             
-            # Flatten MultiIndex columns if present (common in new yfinance)
+            # Format
             if isinstance(df.columns, pd.MultiIndex):
-                # Try to find the level with 'Close', 'Open', etc.
                 if 'Close' in df.columns.get_level_values(0):
                     df.columns = df.columns.get_level_values(0)
-                elif 'Close' in df.columns.get_level_values(1):
-                    df.columns = df.columns.get_level_values(1)
-                    
-            # Handle Duplicate Columns (rare but possible)
+            
             df = df.loc[:, ~df.columns.duplicated()]
-                
-            # Standardize Columns
-            required_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
-            missing = [c for c in required_cols if c not in df.columns]
-            if missing:
-                logger.error(f"Missing columns {missing} for {ticker}")
-                return None
             
-            # Clean Data
-            df = df[required_cols].copy()
-            for col in required_cols:
-                df[col] = pd.to_numeric(df[col], errors='coerce')
+            required = ['Open', 'High', 'Low', 'Close', 'Volume']
+            for c in required:
+                if c not in df.columns: return None
+                df[c] = pd.to_numeric(df[c], errors='coerce')
+                
             df.dropna(inplace=True)
-            
-            if len(df) < 50:
-                logger.warning(f"Insufficient data points ({len(df)}) for {ticker}")
-                return None
-                
-            logger.info(f"Successfully loaded {len(df)} rows for {ticker}")
-            return df
+            return df[required]
             
         except Exception as e:
-            logger.error(f"Failed to fetch {ticker}: {e}")
+            logger.error(f"YF Error: {e}")
             return None
 
     def add_technical_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
         """
-        Adds 'Sniper' features: VWAP, RSI, ATR.
+        Adds 'Sniper' and 'RL' features: VWAP, RSI, ATR, MACD, Log_Return.
         """
         if df is None or df.empty: return df
-        
         df = df.copy()
         
-        # 1. VWAP (Intraday Volume Weighted Average Price)
-        # simplistic calculation (rolling window approx for continuity across days or reset daily)
-        # For sniper momentum, checking vs a Rolling VWAP is often sufficient.
+        # 1. VWAP
         v = df['Volume']
         tp = (df['High'] + df['Low'] + df['Close']) / 3
         df['VWAP'] = (tp * v).cumsum() / v.cumsum()
         
-        # 2. RSI (14 period)
+        # 2. RSI (14)
         delta = df['Close'].diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
         rs = gain / loss
         df['RSI'] = 100 - (100 / (1 + rs))
         
-        # 3. ATR (14 period) - For Volatility Normalization
+        # 3. ATR (14)
         high_low = df['High'] - df['Low']
         high_close = np.abs(df['High'] - df['Close'].shift())
         low_close = np.abs(df['Low'] - df['Close'].shift())
         tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
         df['ATR'] = tr.rolling(window=14).mean()
         
-        # 4. Volume Z-Score (vs 20 period mean)
+        # 4. Volume Z-Score
         vol_mean = df['Volume'].rolling(window=20).mean()
         vol_std = df['Volume'].rolling(window=20).std()
         df['Vol_Z'] = (df['Volume'] - vol_mean) / vol_std
         
-        # Cleanup
+        # 5. MACD (12, 26, 9) - Required for RL
+        exp1 = df['Close'].ewm(span=12, adjust=False).mean()
+        exp2 = df['Close'].ewm(span=26, adjust=False).mean()
+        df['MACD'] = exp1 - exp2
+        df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
+        
+        # 6. Log Returns - Required for RL
+        df['Log_Return'] = np.log(df['Close'] / df['Close'].shift(1))
+        
         df.dropna(inplace=True)
         return df
 
 if __name__ == "__main__":
-    # Sanity Check
     loader = IntradayDataLoader()
-    df_test = loader.fetch_data("NVDA", interval="15m")
-    if df_test is not None:
-        df_test = loader.add_technical_indicators(df_test)
-        print(df_test.tail())
-        print("Sanity Check Passed.")
+    # Test fallback if no keys, or alpaca if keys present
+    print("Testing Fetch...")
+    df = loader.fetch_data("AAPL", interval="15m")
+    if df is not None:
+        df = loader.add_technical_indicators(df)
+        print(df.tail())
+        print(f"Columns: {df.columns.tolist()}")
     else:
-        print("Sanity Check Failed.")
+        print("Fetch Failed.")

@@ -21,12 +21,13 @@ class Settings(BaseSettings):
     INITIAL_BALANCE: float = 10000.0
     
     # Data Provider Configuration
-    DATA_PROVIDER: Literal["alpaca", "yfinance"] = "yfinance"  # Default to yfinance for compatibility
+    DATA_PROVIDER: Literal["alpaca", "yfinance"] = "alpaca"
     
-    # Alpaca API (optional - for real-time data)
-    ALPACA_API_KEY: str = ""
-    ALPACA_SECRET_KEY: str = ""
+    # Alpaca API (Loaded from .env file or environment variables)
+    ALPACA_API_KEY: str = "" 
+    ALPACA_SECRET_KEY: str = "" 
     ALPACA_PAPER: bool = True  # Use paper trading endpoint
+    TDA_ENABLED: bool = False # Disable TDA features for lightweight mode
     
     class Config:
         env_file = ".env"
