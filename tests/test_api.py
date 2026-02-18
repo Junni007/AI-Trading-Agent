@@ -1,4 +1,5 @@
 import pytest
+from unittest import mock
 from fastapi.testclient import TestClient
 from src.api.main import app
 
@@ -9,12 +10,14 @@ def test_home_endpoint():
     assert response.status_code == 200
     assert response.json()["status"] == "Online"
 
+@mock.patch("src.api.main.API_KEY", None)
 def test_scan_trigger():
     # Test triggering the scan
     response = client.get("/api/scan")
     assert response.status_code == 200
     assert response.json()["status"] == "started"
 
+@mock.patch("src.api.main.API_KEY", None)
 def test_results_endpoint():
     response = client.get("/api/results")
     assert response.status_code == 200

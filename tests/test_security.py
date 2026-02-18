@@ -3,6 +3,7 @@ Phase 2 Security Tests — covers CORS, API key auth, security headers, and sche
 brain.think() is mocked in conftest.py so tests finish in seconds.
 """
 import pytest
+from unittest import mock
 from fastapi.testclient import TestClient
 from src.api.main import app
 
@@ -53,21 +54,25 @@ class TestSecurityHeaders:
 # ─── API Key Authentication (Step 2.2) ──────────────────────────────────────
 
 class TestApiKeyAuth:
+    @mock.patch("src.api.main.API_KEY", None)
     def test_dev_mode_no_key_passes(self):
         """When API_KEY env is unset, all protected endpoints pass without auth."""
         res = client.get("/api/results")
         assert res.status_code == 200
 
+    @mock.patch("src.api.main.API_KEY", None)
     def test_dev_mode_scan_passes(self):
         """Scan endpoint also accessible in dev mode."""
         res = client.get("/api/scan")
         assert res.status_code == 200
 
+    @mock.patch("src.api.main.API_KEY", None)
     def test_dev_mode_sim_state_passes(self):
         """Simulation state endpoint accessible in dev mode."""
         res = client.get("/api/simulation/state")
         assert res.status_code == 200
 
+    @mock.patch("src.api.main.API_KEY", None)
     def test_auth_with_key_when_disabled(self):
         """Sending an API key when auth is disabled should still work."""
         res = client.get("/api/results", headers={"X-API-Key": "random_key"})
@@ -82,6 +87,7 @@ class TestSchemaValidation:
         data = res.json()
         assert set(data.keys()) == {"status", "version", "uptime"}
 
+    @mock.patch("src.api.main.API_KEY", None)
     def test_results_response_shape(self):
         res = client.get("/api/results")
         data = res.json()
@@ -91,6 +97,7 @@ class TestSchemaValidation:
         assert "is_thinking" in data
         assert isinstance(data["data"], list)
 
+    @mock.patch("src.api.main.API_KEY", None)
     def test_scan_response_shape(self):
         res = client.get("/api/scan")
         data = res.json()
@@ -129,6 +136,7 @@ class TestRequestId:
         res = client.get("/api/health", headers={"X-Request-ID": custom_id})
         assert res.headers.get("x-request-id") == custom_id
 
+    @mock.patch("src.api.main.API_KEY", None)
     def test_request_id_on_protected_endpoint(self):
         """Protected endpoints also get request IDs."""
         res = client.get("/api/results")
