@@ -71,8 +71,8 @@ class YFinanceProvider(DataProvider):
         try:
             df = yf.download(
                 tickers=ticker,
-                start=start.isoformat(),
-                end=end.isoformat(),
+                start=start.isoformat(timespec='seconds'),
+                end=end.isoformat(timespec='seconds'),
                 interval=self._parse_interval(timeframe),
                 progress=False,
                 auto_adjust=True
@@ -108,8 +108,8 @@ class YFinanceProvider(DataProvider):
         try:
             df = yf.download(
                 tickers=tickers,
-                start=start.isoformat(),
-                end=end.isoformat(),
+                start=start.isoformat(timespec='seconds'),
+                end=end.isoformat(timespec='seconds'),
                 interval=self._parse_interval(timeframe),
                 progress=False,
                 auto_adjust=True,
