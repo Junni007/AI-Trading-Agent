@@ -25,7 +25,8 @@ class RLExpert:
 
     # Feature specification — single source of truth matching VectorizedTradingEnv
     FEATURE_COLS = ['Returns', 'LogReturns', 'Volatility', 'Volume_Z', 'RSI', 'RSI_Rank', 'Momentum_Rank']
-    INPUT_DIM = len(FEATURE_COLS) + 2  # +2 for Position and Balance context
+    # The current checkpoint (best_ppo_light.npz) was trained with 7 features.
+    INPUT_DIM = len(FEATURE_COLS)  # Used to be + 2
     OUTPUT_DIM = 3  # Hold, Buy, Sell
     HIDDEN_DIM = 256
     WINDOW_SIZE = 50
@@ -188,10 +189,8 @@ class RLExpert:
             # 2. Take the last window
             window = features[-self.WINDOW_SIZE:]  # (50, 7)
 
-            # 3. Add context (Position=0, Balance=1.0 for pure signal generation)
-            context = np.tile([0.0, 1.0], (self.WINDOW_SIZE, 1)).astype(np.float32)
-            obs = np.concatenate([window, context], axis=1)  # (50, 9)
-            obs = obs[np.newaxis, :, :]  # (1, 50, 9)
+            # 3. Use only the feature window if trained with 7 features
+            obs = window[np.newaxis, :, :]  # (1, 50, 7)
 
             # 4. Inference
             probs, value = self._forward(obs)
