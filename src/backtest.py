@@ -35,13 +35,16 @@ def run_backtest():
     loader = MVPDataLoader(ticker=TICKER)
     splits = loader.get_data_splits()
     X_test, y_test = splits['test']
-    test_dates = splits['test_dates']
+    
+    if len(X_test) == 0:
+        logger.error("No test data available for backtesting.")
+        return
     
     # 2. Load Model
     input_dim = X_test.shape[2]
     model = LSTMPredictor(input_dim=input_dim, output_dim=3)
     try:
-        model.load_state_dict(torch.load("final_lstm_model.pth"))
+        model.load_state_dict(torch.load("final_lstm_model.pth", weights_only=True))
         model.eval()
     except FileNotFoundError:
         logger.error("Model not found! Train first.")
@@ -72,30 +75,31 @@ def run_backtest():
     positions = np.array(positions)
     
     # Calculate Returns
-    # Market Returns (Test Set)
-    # Reconstruct close prices to get returns? 
-    # splits data is scaled features.
-    # We need separate access to Raw Returns for the test period.
-    # MVPDataLoader engineered `Log_Return`.
-    # Let's align carefully. create_sequences creates aligned X, y.
-    # The `y` is the target direction, not the return value.
-    # We need the actual returns corresponding to the NEXT STEP of each X input.
-    # The `create_sequences` usually aligns X[t] with y[t] where y[t] is target derived from Return[t+1].
+    # Re-fetch and feature-engineer the raw data to get Log_Return for the test period
+    full_df = loader.fetch_batch_data()
+    if full_df.empty:
+        logger.error("Failed to fetch data for backtest returns calculation.")
+        return
     
-    # Let's fetch the raw test dataframe again to get Returns
-    # This is a bit inefficient but accurate if we rely on dates.
-    # The `test_dates` attribute allows us to map back.
+    # Handle single vs multi-ticker download format
+    if isinstance(full_df.columns, pd.MultiIndex):
+        df_raw = full_df[TICKER].copy() if TICKER in full_df.columns.get_level_values(0) else full_df.copy()
+    else:
+        df_raw = full_df.copy()
     
-    # Actually, simpler: Re-fetch feature engineered df and slice test
-    df = loader.fetch_data()
-    df_eng = loader.feature_engineering(df)
+    df_eng = loader.feature_engineering(df_raw, return_raw=True)
+    if df_eng.empty:
+        logger.error("Feature engineering returned empty DataFrame.")
+        return
+    
     test_mask = (df_eng.index >= '2024-01-01')
     df_test = df_eng[test_mask].iloc[loader.window_size:] # trimmed by window
     
-    market_returns = df_test['Log_Return'].shift(-1).dropna().values # Return of taking action at t, realized at t+1?
-    # X[t] predicts t+1. So if we trade at t (Close), we get Return[t+1].
-    # df_eng['Log_Return'] is log(Close_t / Close_t-1).
-    # So `Log_Return`.shift(-1) is log(Close_t+1 / Close_t). Correct.
+    if df_test.empty or 'Log_Return' not in df_test.columns:
+        logger.error("Test period data is empty or missing Log_Return column.")
+        return
+    
+    market_returns = df_test['Log_Return'].shift(-1).dropna().values
     
     # Align lengths
     n = min(len(positions), len(market_returns))

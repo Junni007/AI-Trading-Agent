@@ -1,6 +1,7 @@
 import logging
 import json
 import os
+import tempfile
 from datetime import datetime
 import numpy as np
 
@@ -35,12 +36,47 @@ class SimulationEngine:
                     return json.load(f)
             except (json.JSONDecodeError, OSError) as e:
                 logger.warning(f"Failed to load state: {e}")
+                # Try backup
+                backup_path = DB_PATH + ".bak"
+                if os.path.exists(backup_path):
+                    try:
+                        with open(backup_path, 'r') as f:
+                            logger.info("Recovered state from backup file.")
+                            return json.load(f)
+                    except Exception:
+                        pass
                 return None
         return None
         
     def save_state(self):
-        with open(DB_PATH, 'w') as f:
-            json.dump(self.state, f, indent=4)
+        """Persist state to JSON file using atomic write (write-to-temp-then-rename)."""
+        try:
+            # Create backup of existing state before overwriting
+            if os.path.exists(DB_PATH):
+                backup_path = DB_PATH + ".bak"
+                try:
+                    with open(DB_PATH, 'r') as src, open(backup_path, 'w') as dst:
+                        dst.write(src.read())
+                except OSError:
+                    pass  # Non-critical: backup failed, still proceed with save
+
+            # Atomic write: write to temp file, then rename
+            dir_name = os.path.dirname(DB_PATH) or "."
+            fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix=".tmp")
+            try:
+                with os.fdopen(fd, 'w') as f:
+                    json.dump(self.state, f, indent=4)
+                # Atomic rename (on same filesystem)
+                os.replace(tmp_path, DB_PATH)
+            except Exception:
+                # Clean up temp file on failure
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+                raise
+        except Exception as e:
+            logger.error(f"Failed to save state: {e}")
             
     def get_portfolio(self):
         return self.state

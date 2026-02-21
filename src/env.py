@@ -107,6 +107,11 @@ class TradingEnv(gym.Env):
         # 1: Buy (Buy 1 share - simplified)
         # 2: Sell (Sell 1 share - simplified)
         
+        # Transaction costs: commission + slippage estimate
+        COMMISSION_RATE = 0.001   # 0.1% commission per trade
+        SLIPPAGE_RATE = 0.0005    # 0.05% slippage estimate
+        TRANSACTION_COST = COMMISSION_RATE + SLIPPAGE_RATE  # 0.15% total
+        
         # Position sizing: Volatility-Targeted (v4.0 Upgrade)
         # Scale position size inversely with volatility for consistent risk
         trade_value = self._calculate_vol_targeted_position(prev_net_worth, current_price, self.current_step)
@@ -115,14 +120,18 @@ class TradingEnv(gym.Env):
         action_type = "HOLD"
         if action == 1:  # Buy
             cost = current_price * unit
-            if self.balance >= cost:
-                self.balance -= cost
+            transaction_fee = cost * TRANSACTION_COST
+            total_cost = cost + transaction_fee
+            if self.balance >= total_cost:
+                self.balance -= total_cost
                 self.position += unit
                 action_type = "BUY"
         elif action == 2:  # Sell
             sell_amount = min(unit, self.position)  # Can't sell more than we have
             if sell_amount > 0:
-                self.balance += current_price * sell_amount
+                proceeds = current_price * sell_amount
+                transaction_fee = proceeds * TRANSACTION_COST
+                self.balance += proceeds - transaction_fee
                 self.position -= sell_amount
                 action_type = "SELL"
                  

@@ -17,7 +17,7 @@ pip-delete-this-directory.txt
 .gsd
 .gemini
 adapters
-
+.opencode
 
 # VS Code
 .vscode/

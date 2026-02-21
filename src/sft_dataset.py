@@ -25,7 +25,7 @@ class GoldenDataset(Dataset):
         data_dict = loader.fetch_batch_data()
         
         # 2. Labeler
-        labeler = GoldenLabeler(order=20)
+        labeler = GoldenLabeler(orders=[20])
         
         if isinstance(data_dict, pd.DataFrame) and isinstance(data_dict.columns, pd.MultiIndex):
             # It's a MultiIndex DataFrame (Ticker, Field)

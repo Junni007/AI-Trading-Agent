@@ -51,8 +51,8 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
                             An unexpected error occurred. This has been logged for debugging.
                         </p>
 
-                        {/* Error details (dev only) */}
-                        {this.state.error && (
+                        {/* Error details (dev only — hidden in production builds) */}
+                        {this.state.error && import.meta.env.DEV && (
                             <div className="p-3 bg-void/60 rounded-xl border border-graphite/30 text-left mb-6">
                                 <p className="text-[11px] text-smoke/50 uppercase tracking-wider mb-1 font-semibold">Error</p>
                                 <code className="text-xs text-crimson/80 font-mono break-all">

@@ -2,6 +2,7 @@
 Pydantic v2 response schemas for Signal.Engine API.
 These models validate response shapes and auto-generate OpenAPI docs at /docs.
 """
+from __future__ import annotations
 
 from pydantic import BaseModel, Field
 from typing import Any, Dict, List, Optional
@@ -19,13 +20,13 @@ class ErrorResponse(BaseModel):
 # ─── Settings ────────────────────────────────────────────────────────────────
 
 class SettingsPayload(BaseModel):
-    """User-configurable settings. Extra fields allowed for forward-compat."""
+    """User-configurable settings. Extra fields are rejected to prevent injection."""
     universe: str = "nifty50"
     confidenceThreshold: int = 70
     maxPositions: int = 5
 
     class Config:
-        extra = "allow"
+        extra = "forbid"
 
 
 # ─── Health ──────────────────────────────────────────────────────────────────

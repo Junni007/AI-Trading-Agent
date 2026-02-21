@@ -1,146 +1,228 @@
 import logging
 import numpy as np
 import pandas as pd
-import json
-from typing import Dict, Optional, Tuple
+from typing import Dict, Tuple
 from pathlib import Path
 
 # Configure Logger
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('RLExpert')
 
+
 class RLExpert:
     """
     Expert 3: Deep Reinforcement Learning (PPO) - Lightweight Inference.
     Uses Numpy-only implementation (No PyTorch dependency).
+
+    Architecture MUST match training (RecurrentActorCritic in train_ppo_optimized.py):
+      - LSTM(input_size=9, hidden_size=256, num_layers=1, batch_first=True)
+      - Actor: Linear(256, 128) -> ReLU -> Linear(128, 3)
+      - Critic: Linear(256, 128) -> ReLU -> Linear(128, 1)
+
+    Input features (9 total = 7 market + 2 context):
+      [Returns, LogReturns, Volatility, Volume_Z, RSI, RSI_Rank, Momentum_Rank, Position, Balance]
     """
-    
+
+    # Feature specification — single source of truth matching VectorizedTradingEnv
+    FEATURE_COLS = ['Returns', 'LogReturns', 'Volatility', 'Volume_Z', 'RSI', 'RSI_Rank', 'Momentum_Rank']
+    INPUT_DIM = len(FEATURE_COLS) + 2  # +2 for Position and Balance context
+    OUTPUT_DIM = 3  # Hold, Buy, Sell
+    HIDDEN_DIM = 256
+    WINDOW_SIZE = 50
+
     def __init__(self, model_path: str = "checkpoints/best_ppo_light.npz"):
-        self.weights = {}
+        self.weights: Dict[str, np.ndarray] = {}
         self.is_trained = False
         self._load_model(model_path)
-        
-        # Dimensions (must match training)
-        self.input_dim = 8
-        self.output_dim = 3
-        
+
     def _load_model(self, path: str):
-        """
-        Loads weights from a .npz file (numpy archive).
-        """
+        """Loads weights from a .npz file (numpy archive)."""
         try:
             p = Path(path)
             if not p.exists():
-                logger.warning(f"⚠️ Light Checkpoint not found at {path}. RLExpert running with RANDOM DECISIONS.")
+                logger.warning(f"Light Checkpoint not found at {path}. RLExpert returning WAIT signals.")
                 self.is_trained = False
                 return
 
-            # Load Numpy weights
             data = np.load(path)
             self.weights = {k: data[k] for k in data.files}
-            
             self.is_trained = True
-            logger.info(f"✅ RLExpert loaded lightweight model from {path}")
-            
+            logger.info(f"RLExpert loaded lightweight model from {path}")
+
         except Exception as e:
-            logger.error(f"⚠️ Failed to load light model: {e}")
+            logger.error(f"Failed to load light model: {e}")
             self.is_trained = False
 
-    def _forward(self, x: np.ndarray) -> Tuple[np.ndarray, float]:
+    # ------------------------------------------------------------------
+    # Numpy LSTM implementation
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _sigmoid(x: np.ndarray) -> np.ndarray:
+        return 1.0 / (1.0 + np.exp(-np.clip(x, -20, 20)))
+
+    def _lstm_step(self, x_t: np.ndarray, h: np.ndarray, c: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
-        Manual Forward Pass of the Actor-Critic Network.
-        Architecture: 
-          - Shared FC1 (64) -> Tanh
-          - Shared FC2 (64) -> Tanh
-          - Actor Head (Output Dim) -> Softmax
-          - Critic Head (1) -> Linear
+        Single LSTM time-step.
+        x_t: (batch, input_dim)
+        h, c: (batch, hidden_dim)
+        
+        PyTorch LSTM weight layout:
+          weight_ih: (4*H, I) — [W_ii, W_if, W_ig, W_io] stacked
+          weight_hh: (4*H, H) — [W_hi, W_hf, W_hg, W_ho] stacked
+          bias_ih:   (4*H,)
+          bias_hh:   (4*H,)
+        """
+        H = self.HIDDEN_DIM
+        W_ih = self.weights['lstm.weight_ih_l0']  # (4H, I)
+        W_hh = self.weights['lstm.weight_hh_l0']  # (4H, H)
+        b_ih = self.weights['lstm.bias_ih_l0']     # (4H,)
+        b_hh = self.weights['lstm.bias_hh_l0']     # (4H,)
+
+        gates = x_t @ W_ih.T + b_ih + h @ W_hh.T + b_hh  # (batch, 4H)
+
+        i_gate = self._sigmoid(gates[:, 0:H])
+        f_gate = self._sigmoid(gates[:, H:2*H])
+        g_gate = np.tanh(gates[:, 2*H:3*H])
+        o_gate = self._sigmoid(gates[:, 3*H:4*H])
+
+        c_new = f_gate * c + i_gate * g_gate
+        h_new = o_gate * np.tanh(c_new)
+        return h_new, c_new
+
+    def _forward(self, x_seq: np.ndarray) -> Tuple[np.ndarray, float]:
+        """
+        Forward pass through LSTM Actor-Critic.
+        x_seq: (1, seq_len, INPUT_DIM) — a single observation window.
+        Returns: (action_probs [1, 3], value scalar)
         """
         if not self.is_trained or not self.weights:
-            # Random fallback
-            return np.random.rand(1, 3), 0.0
+            logger.warning("RLExpert: No trained model available. Returning WAIT signal.")
+            return np.array([[0.8, 0.1, 0.1]]), 0.0
 
-        # Helper for linear layer
-        def linear(input_x, w, b):
-            return np.dot(input_x, w.T) + b
+        def linear(x, w, b):
+            return x @ w.T + b
 
-        # Helper for activation
-        def tanh(x):
-            return np.tanh(x)
-            
         def softmax(x):
             e_x = np.exp(x - np.max(x, axis=1, keepdims=True))
             return e_x / np.sum(e_x, axis=1, keepdims=True)
 
         try:
-            # Access weights (Expect names: shared_net.0.weight, actor.weight, etc.)
-            # We map standard PyTorch names to our dict keys
-            
-            # Layer 1 (Shared)
-            h1 = linear(x, self.weights['shared_net.0.weight'], self.weights['shared_net.0.bias'])
-            h1 = tanh(h1)
-            
-            # Layer 2 (Shared)
-            h2 = linear(h1, self.weights['shared_net.2.weight'], self.weights['shared_net.2.bias'])
-            h2 = tanh(h2)
-            
-            # Actor Head
-            logits = linear(h2, self.weights['actor.weight'], self.weights['actor.bias'])
+            batch = x_seq.shape[0]
+            seq_len = x_seq.shape[1]
+
+            # Initialize hidden state
+            h = np.zeros((batch, self.HIDDEN_DIM), dtype=np.float32)
+            c = np.zeros((batch, self.HIDDEN_DIM), dtype=np.float32)
+
+            # Run LSTM over sequence
+            for t in range(seq_len):
+                h, c = self._lstm_step(x_seq[:, t, :], h, c)
+
+            # h is now the last hidden state — feed to heads
+            # Actor: Linear(256,128) -> ReLU -> Linear(128,3)
+            a1 = np.maximum(0, linear(h, self.weights['actor.0.weight'], self.weights['actor.0.bias']))
+            logits = linear(a1, self.weights['actor.2.weight'], self.weights['actor.2.bias'])
             probs = softmax(logits)
-            
-            # Critic Head
-            value = linear(h2, self.weights['critic.weight'], self.weights['critic.bias'])
-            
-            return probs, value.item()
-            
+
+            # Critic: Linear(256,128) -> ReLU -> Linear(128,1)
+            c1 = np.maximum(0, linear(h, self.weights['critic.0.weight'], self.weights['critic.0.bias']))
+            value = linear(c1, self.weights['critic.2.weight'], self.weights['critic.2.bias'])
+
+            return probs, float(value.item())
+
         except KeyError as e:
-            logger.error(f"Missing weight key: {e}")
-            return np.random.rand(1, 3), 0.0
+            logger.error(f"Missing weight key: {e}. Returning WAIT signal.")
+            return np.array([[0.8, 0.1, 0.1]]), 0.0
+
+    # ------------------------------------------------------------------
+    # Feature engineering — matches VectorizedTradingEnv._precompute_features
+    # ------------------------------------------------------------------
+    def _build_features(self, df: pd.DataFrame) -> np.ndarray:
+        """
+        Builds the same 7-feature vector as VectorizedTradingEnv._precompute_features.
+        Returns: numpy array of shape (n_rows, 7), NaN rows dropped.
+        """
+        ohlcv = df[['Open', 'High', 'Low', 'Close', 'Volume']].copy()
+
+        ohlcv['Returns'] = ohlcv['Close'].pct_change()
+        ohlcv['LogReturns'] = np.log(ohlcv['Close'] / ohlcv['Close'].shift(1))
+        ohlcv['Volatility'] = ohlcv['Returns'].rolling(20).std()
+        vol_mean = ohlcv['Volume'].rolling(20).mean()
+        vol_std = ohlcv['Volume'].rolling(20).std()
+        ohlcv['Volume_Z'] = (ohlcv['Volume'] - vol_mean) / (vol_std + 1e-8)
+
+        # RSI
+        delta = ohlcv['Close'].diff()
+        gain = (delta.where(delta > 0, 0)).rolling(14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
+        ohlcv['RSI'] = 100 - (100 / (1 + gain / (loss + 1e-8)))
+
+        # Cross-sectional ranks default to 0.5 for single-ticker inference
+        ohlcv['RSI_Rank'] = 0.5
+        ohlcv['Momentum_Rank'] = 0.5
+
+        ohlcv = ohlcv.dropna()
+        features = ohlcv[self.FEATURE_COLS].values.astype(np.float32)
+
+        # Z-score normalize (same as training)
+        mean = features.mean(axis=0)
+        std = features.std(axis=0) + 1e-8
+        features = (features - mean) / std
+
+        return features
 
     def get_vote(self, ticker: str, df: pd.DataFrame) -> Dict:
         """
-        Runs the PPO Policy on the latest data point (Numpy Version).
+        Runs the PPO Policy on a window of data (LSTM version).
         """
-        if df.empty or len(df) < 50:
-            return {'Signal': 'NEUTRAL', 'Confidence': 0.0, 'Reason': 'Model Not Ready'}
-            
+        if df.empty or len(df) < self.WINDOW_SIZE + 20:
+            return {'Signal': 'NEUTRAL', 'Confidence': 0.0, 'Reason': 'Insufficient data'}
+
         try:
-            # 1. Feature Engineering (Match Env)
-            last_row = df.iloc[-1]
-            features = [
-                last_row.get('RSI', 50) / 100.0,
-                last_row.get('MACD', 0),
-                last_row.get('Log_Return', 0),
-                last_row.get('ATR', 0)
-            ]
-            
-            # Padding to match input_dim=8 (Simulate account info as 0s/neutral for inference if not available)
-            # Real env has Balance/Postion. Here we assume static/normalized or just feed 0s.
-            # Ideally we pass current portfolio state, but for pure signal generation, 0s are safe-ish.
-            features += [0.0] * (self.input_dim - len(features))
-            
-            state_vec = np.array(features, dtype=np.float32).reshape(1, -1)
-            
-            # 2. Inference
-            probs, value = self._forward(state_vec)
-            action = np.argmax(probs)
-            confidence = probs[0][action]
-            
-            # 3. Map Action
-            signals = {0: "WAIT", 1: "BUY", 2: "SELL"}
-            signal = signals.get(action, "WAIT")
-            
+            # 1. Build features matching training env
+            features = self._build_features(df)
+
+            if len(features) < self.WINDOW_SIZE:
+                return {'Signal': 'NEUTRAL', 'Confidence': 0.0, 'Reason': 'Insufficient features after NaN drop'}
+
+            # 2. Take the last window
+            window = features[-self.WINDOW_SIZE:]  # (50, 7)
+
+            # 3. Add context (Position=0, Balance=1.0 for pure signal generation)
+            context = np.tile([0.0, 1.0], (self.WINDOW_SIZE, 1)).astype(np.float32)
+            obs = np.concatenate([window, context], axis=1)  # (50, 9)
+            obs = obs[np.newaxis, :, :]  # (1, 50, 9)
+
+            # 4. Inference
+            probs, value = self._forward(obs)
+            action = int(np.argmax(probs))
+            confidence = float(probs[0][action])
+
+            # 5. Map Action
+            signal_map = ["WAIT", "BUY", "SELL"]
+            signal = signal_map[action] if action < len(signal_map) else "WAIT"
+
             return {
                 'Signal': signal,
-                'Confidence': float(confidence),
-                'Reason': f"RL Agent (Prob={confidence:.2f})"
+                'Confidence': confidence,
+                'Reason': f"RL Agent (Prob={confidence:.2f}, V={value:.2f})"
             }
-            
+
         except Exception as e:
             logger.error(f"Inference Error {ticker}: {e}")
             return {'Signal': 'NEUTRAL', 'Confidence': 0.0, 'Reason': 'Inference Failed'}
 
+
 if __name__ == "__main__":
     expert = RLExpert()
-    # Dummy Data
-    df = pd.DataFrame({'Close': [100]*60, 'RSI': [30]*60})
+    # Dummy Data — need enough rows for rolling windows
+    np.random.seed(42)
+    n = 100
+    df = pd.DataFrame({
+        'Open': 100 + np.random.randn(n).cumsum(),
+        'High': 101 + np.random.randn(n).cumsum(),
+        'Low': 99 + np.random.randn(n).cumsum(),
+        'Close': 100 + np.random.randn(n).cumsum(),
+        'Volume': np.random.randint(1000, 10000, n),
+    })
     print(expert.get_vote("TEST", df))

@@ -136,7 +136,9 @@ class HybridBrain:
                         } 
                         for _, row in subset.iterrows()
                     ]
-            except: decision['History'] = []
+            except Exception as e:
+                logger.debug(f"Failed to build history for {t}: {e}")
+                decision['History'] = []
 
             # Add to Candidate List if Conf > 0.6
             if decision['Confidence'] >= 0.6:

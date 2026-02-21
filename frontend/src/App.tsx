@@ -233,6 +233,15 @@ function AppContent() {
                     <Route path="/signals" element={<Signals data={data} loading={loading} onDetails={openDetails} />} />
                     <Route path="/analytics" element={<Analytics simState={simState} />} />
                     <Route path="/settings" element={<Settings />} />
+                    <Route path="*" element={
+                        <div className="flex-grow flex flex-col items-center justify-center py-32 text-center">
+                            <h1 className="font-display text-6xl font-bold text-chalk mb-4">404</h1>
+                            <p className="text-smoke text-lg mb-8">Page not found. The route you requested doesn't exist.</p>
+                            <a href="/" className="px-6 py-3 rounded-xl text-sm font-semibold bg-gradient-to-b from-amber to-amber/90 text-void shadow-lg shadow-amber/20 transition-all hover:shadow-xl">
+                                Back to Dashboard
+                            </a>
+                        </div>
+                    } />
                 </Routes>
             </main>
 

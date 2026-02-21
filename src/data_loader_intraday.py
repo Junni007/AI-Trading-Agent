@@ -7,7 +7,7 @@ from typing import Optional, Dict
 from datetime import datetime, timedelta
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockBarsRequest
-from alpaca.data.timeframe import TimeFrame
+from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
 from src.config import settings
 
 # Configure Logger
@@ -69,7 +69,6 @@ class IntradayDataLoader:
             start_date = datetime.now() - timedelta(days=5 if interval=='1m' else 60)
             
             # Correct TimeFrame construction for 15m
-            from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
             if interval == '15m':
                 tf = TimeFrame(15, TimeFrameUnit.Minute)
             elif interval == '5m':

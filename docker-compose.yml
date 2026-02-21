@@ -9,10 +9,14 @@ services:
     env_file:
       - .env
     volumes:
-      - ./src:/app/src  # Hot reload for dev
-      - ./logs:/app/logs
       - ./simulation_state.json:/app/simulation_state.json
       - ./settings.json:/app/settings.json
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
     restart: unless-stopped
 
   frontend:
@@ -23,5 +27,6 @@ services:
     ports:
       - "3000:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     restart: unless-stopped

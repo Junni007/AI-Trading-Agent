@@ -39,7 +39,7 @@ def load_model(checkpoint_path):
     
     try:
         # Load lightning checkpoint
-        checkpoint = torch.load(checkpoint_path, map_location='cpu')
+        checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=True)
         state_dict = checkpoint['state_dict']
         
         # Adjust keys if needed (remove 'model.' prefix)

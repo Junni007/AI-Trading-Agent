@@ -167,16 +167,6 @@ class VectorizedTradingEnv:
         self.balances = torch.full((self.n_envs,), self.initial_balance, device=self.device)
         return self._get_obs()
     
-        return torch.stack(batch_obs)
-    
-    def _get_obs(self):
-        """Get observations for all environments (batch)."""
-        # Optimized tensor slicing instead of loop
-        # Returns: (n_envs, window_size, features)
-        
-        # 1. Get current steps for all envs
-        steps = self.current_steps
-        
     def _get_obs(self):
         """
         Get observations for all environments (batch).
@@ -223,69 +213,53 @@ class VectorizedTradingEnv:
         current_prices = self.prices[self.current_steps + self.window_size]
         next_prices = self.prices[self.current_steps + self.window_size + 1]
         
-        # Calculate rewards based on actions
+        # Calculate returns based on actions
         returns = (next_prices - current_prices) / current_prices
         
-        # Action effects
+        # Transaction cost: 0.15% per trade (commission + slippage)
+        TRANSACTION_COST = 0.0015
+        
+        # Action effects & rewards
         rewards = torch.zeros(self.n_envs, device=self.device)
         
-        # Buy (action=1): reward = returns if we're now long
+        # Buy (action=1): open long position
         buy_mask = (actions == 1) & (self.positions == 0)
         self.positions = torch.where(buy_mask, torch.ones_like(self.positions), self.positions)
+        # Pay transaction cost on entry
+        rewards = torch.where(buy_mask, torch.tensor(-TRANSACTION_COST * 100, device=self.device), rewards)
         
-        # Sell (action=2): reward = position * returns if we close
+        # Sell (action=2): close long position
         sell_mask = (actions == 2) & (self.positions == 1)
-        rewards = torch.where(sell_mask, returns * 100, rewards)  # Scale reward
+        # Reward = realized return scaled by 10 (same scale as hold)
+        # minus transaction cost for exit
+        rewards = torch.where(sell_mask, returns * 10 - TRANSACTION_COST * 100, rewards)
         self.positions = torch.where(sell_mask, torch.zeros_like(self.positions), self.positions)
         
-        # Hold with position: reward based on unrealized P&L
+        # Hold with position: reward based on unrealized P&L (same scale as sell)
         hold_long = (actions == 0) & (self.positions == 1)
         rewards = torch.where(hold_long, returns * 10, rewards)
         
-        # Update balances
+        # Small holding cost to discourage indefinite holding
+        rewards = torch.where(hold_long, rewards - 0.001, rewards)
+        
         # Update balances
         self.balances = self.balances * (1 + rewards / 100)
         
         # --- Verifiable Rewards (Vectorized) ---
-        # 1. Trend Reward: +0.05 if WE ARE LONG and price > SMA50
-        # (State-Based Reward, not Action-Based)
+        # Trend Reward: State-based, not action-based
         current_sma = self.sma50[self.current_steps + self.window_size]
         
         trend_rewards = torch.zeros(self.n_envs, device=self.device)
         
-        # Check if we are currently Long (after action update)
         long_mask = (self.positions == 1)
-        
-        # Good Long: We are Long AND Price > SMA
         up_trend = current_prices > current_sma
-        trend_rewards = torch.where(long_mask & up_trend, torch.tensor(0.05, device=self.device), trend_rewards)
         
-        # Bad Long: We are Long AND Price < SMA (Fighting the trend)
+        # Good Long: Long AND Price > SMA
+        trend_rewards = torch.where(long_mask & up_trend, torch.tensor(0.05, device=self.device), trend_rewards)
+        # Bad Long: Long AND Price < SMA
         trend_rewards = torch.where(long_mask & ~up_trend, torch.tensor(-0.05, device=self.device), trend_rewards)
         
-        # Missed Opportunity (FOMO): Flat in Uptrend
-        # If Flat (Pos=0) and Price > SMA -> Penalty
-        flat_mask = (self.positions == 0)
-        trend_rewards = torch.where(flat_mask & up_trend, torch.tensor(-0.02, device=self.device), trend_rewards)
-        
         rewards += trend_rewards
-        
-        # v4.0: Sharpe Ratio Bonus (Risk-Adjusted Performance)
-        # Calculate rolling Sharpe over last 20 steps
-        sharpe_bonus = torch.zeros(self.n_envs, device=self.device)
-        for i in range(self.n_envs):
-            step = self.current_steps[i].item()
-            if step >= 20:
-                # Get last 20 returns
-                recent_returns = self.returns_history[step-20:step]
-                mean_ret = recent_returns.mean()
-                std_ret = recent_returns.std() + 1e-8
-                sharpe = mean_ret / std_ret
-                
-                # Small bonus for high Sharpe (capped at ±0.1)
-                sharpe_bonus[i] = torch.clamp(torch.tensor(sharpe * 0.1, device=self.device), -0.1, 0.1)
-        
-        rewards += sharpe_bonus
         
         # Step forward
         self.current_steps += 1
@@ -332,14 +306,18 @@ class OptimizedPPOAgent(pl.LightningModule):
         
         self.automatic_optimization = False
         self.save_hyperparameters(ignore=['env'])
+        # Store initial entropy for scheduling (save_hyperparameters already ran)
+        self.hparams['entropy_coef_init'] = self.entropy_coef
         
     def forward(self, x, hidden=None):
         return self.model(x, hidden)
     
     def on_train_epoch_start(self):
-        """Vectorized Entropy Decay"""
-        decay = 0.95
-        self.entropy_coef = max(0.001, 0.01 * (decay ** self.current_epoch))
+        """Entropy scheduling: linear decay with a floor to prevent collapse."""
+        # Start at initial entropy_coef (0.05), decay slowly, floor at 0.005
+        # Original code decayed from 0.01 (ignoring the __init__ value of 0.05)
+        decay = 0.98  # Slower decay (was 0.95)
+        self.entropy_coef = max(0.005, self.hparams.get('entropy_coef_init', 0.05) * (decay ** self.current_epoch))
         self.log("entropy_coef", self.entropy_coef, prog_bar=True)
     
     def training_step(self, batch, batch_idx):

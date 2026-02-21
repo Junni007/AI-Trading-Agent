@@ -99,7 +99,8 @@ class SniperEngine:
             if df is not None and not df.empty:
                 try:
                     current_price = df.iloc[-1]['Close']
-                except: pass
+                except Exception:
+                    pass
 
             # Always append result, even if Neutral (for Search visibility)
             results.append({

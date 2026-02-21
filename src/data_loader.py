@@ -4,8 +4,8 @@ import numpy as np
 import logging
 from typing import Tuple, Dict, Optional
 from sklearn.preprocessing import StandardScaler
-from ta.momentum import RSIIndicator
-from ta.trend import MACD
+from ta.momentum import RSIIndicator  # noqa: F401 — kept for potential future use
+from ta.trend import MACD as MACD_Indicator  # noqa: F401 — kept for potential future use
 # from .tda_features import FeatureProcessor # TDA disabled for Massive Scale speed
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -78,16 +78,9 @@ class MVPDataLoader:
         
         df = df.copy()
         try:
-            # ... (Existing Logic) ...
-            
-            # --- Technicals & Features (Lines 80-123) ---
-            # ... (Implicitly kept) ...
-            
-            # 1. Technical Indicators
-            df['RSI'] = RSIIndicator(df['Close'], window=14).rsi()
-            macd = MACD(df['Close'])
-            df['MACD'] = macd.macd()
-            df['MACD_Signal'] = macd.macd_signal()
+            # 1. Technical Indicators (single implementation — no duplication)
+            df['RSI'] = self.calculate_rsi(df['Close'])
+            df['MACD'], df['MACD_Signal'] = self.calculate_macd(df['Close'])
             
             # 2. Features
             # --- Trends ---
@@ -106,19 +99,16 @@ class MVPDataLoader:
             df['Log_Vol'] = np.log(df['Volume'] + 1)
             df['Vol_Change'] = df['Log_Vol'].diff()
 
-            # --- Base Methods ---
-            df['RSI'] = self.calculate_rsi(df['Close'])
-            df['MACD'], df['MACD_Signal'] = self.calculate_macd(df['Close'])
+            # --- Returns ---
             df['Log_Return'] = np.log(df['Close'] / df['Close'].shift(1))
             
-            # 3. Target
+            # 3. Target (Binary: Up=1, Down=0)
+            # Fixed threshold (0) instead of qcut to avoid data leakage.
+            # qcut computed bin edges on the ENTIRE dataset before train/test split,
+            # leaking future distribution info into training labels.
             future_ret = df['Log_Return'].shift(-1)
             mask = future_ret.notna()
-            try:
-                df.loc[mask, 'Target'] = pd.qcut(future_ret[mask], 2, labels=[0, 1])
-            except ValueError:
-                median_ret = future_ret.median()
-                df.loc[mask, 'Target'] = (future_ret[mask] > median_ret).astype(int)
+            df.loc[mask, 'Target'] = (future_ret[mask] > 0).astype(int)
             
             df.dropna(inplace=True)
             df['Target'] = df['Target'].astype(int) 
@@ -134,8 +124,6 @@ class MVPDataLoader:
         except Exception as e:
             logger.warning(f"Feature engineering failed: {e}")
             return pd.DataFrame()
-            
-        return df
 
     def calculate_rsi(self, series: pd.Series, window: int = 14) -> pd.Series:
         delta = series.diff()

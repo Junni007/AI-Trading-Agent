@@ -52,9 +52,9 @@ class AlpacaTrader:
         logger.info("Loading Brain...")
         
         # Initialize Architecture (Must match training!)
-        # Input: 7 (Features=5 + Pos + Bal)
+        # Input: 9 (Features=7 + 2 context: Position, Balance)
         # Output: 3 (Hold, Buy, Sell)
-        model = RecurrentActorCritic(input_dim=7, output_dim=3, hidden_dim=256)
+        model = RecurrentActorCritic(input_dim=9, output_dim=3, hidden_dim=256)
         
         # Load Weights
         # Priority: Best Checkpoint > SFT Model > Random
@@ -66,7 +66,7 @@ class AlpacaTrader:
             # Lightning checkpoints are nested
             # We need to extract the state_dict for the inner model
             try:
-                checkpoint = torch.load(checkpoint_path, map_location=self.device)
+                checkpoint = torch.load(checkpoint_path, map_location=self.device, weights_only=True)
                 # Lightning saves as "model.lstm.weight...", we need to strip "model." prefix if loading into inner class
                 state_dict = {}
                 for k, v in checkpoint['state_dict'].items():
@@ -78,7 +78,7 @@ class AlpacaTrader:
                 
         elif os.path.exists(sft_path):
             logger.info(f"Loading SFT Model: {sft_path}")
-            model.load_state_dict(torch.load(sft_path, map_location=self.device))
+            model.load_state_dict(torch.load(sft_path, map_location=self.device, weights_only=True))
         else:
             logger.warning("⚠️ No weights found! Using Random Brain.")
             
@@ -149,22 +149,21 @@ class AlpacaTrader:
         """Main Loop: Fetch -> Feature Eng -> Predict -> Act"""
         df = self.get_market_data()
         
-        # Feature Engineering (Re-use VectorizedTradingEnv logic!)
-        # We create a dummy env with 1 env to handle the math
-        # Ideally, refactor feature engineering into a pure function
-        # But instantiating this class is cheap enough
-        env = VectorizedTradingEnv(df, n_envs=1, window_size=50)
+        if df.empty or len(df) < 100:
+            logger.error("Not enough market data to make a decision!")
+            return
         
-        # The env automatically computes features in __init__ -> self.features
-        # We need the LAST window (most recent data)
-        # self.features shape: (Total_Steps, Features)
+        # Feature Engineering (Re-use VectorizedTradingEnv logic)
+        # VectorizedTradingEnv._precompute_features() computes 7 market features:
+        # [Returns, LogReturns, Volatility, Volume_Z, RSI, RSI_Rank, Momentum_Rank]
+        env = VectorizedTradingEnv(df, n_envs=1, window_size=50)
         
         if len(env.features) < 50:
             logger.error("Not enough data to form a window!")
             return
             
-        # Get the latest window
-        recent_window = env.features[-50:] # Shape (50, 5)
+        # Get the latest window — Shape: (50, 7)
+        recent_window = env.features[-50:]
         
         # Get Context
         current_pos = self.get_position()
@@ -172,18 +171,16 @@ class AlpacaTrader:
         
         logger.info(f"Context -> Position: {current_pos}, Balance Ratio: {current_bal:.2f}")
         
-        # Create Observation Tensor
-        # Shape: (1, 50, 5)
+        # Create Observation Tensor — Shape: (1, 50, 7)
         seq_tensor = recent_window.unsqueeze(0).to(self.device)
         
-        # Create Context Tensor
-        # Shape: (1, 2)
+        # Create Context Tensor — Shape: (1, 2)
         ctx_tensor = torch.tensor([[current_pos, current_bal]], device=self.device)
         
         # Broadcast Context -> (1, 50, 2)
         ctx_expanded = ctx_tensor.unsqueeze(1).expand(-1, 50, -1)
         
-        # Fallback Features + Context -> (1, 50, 7)
+        # Full Observation: Features + Context -> (1, 50, 9)
         full_obs = torch.cat([seq_tensor, ctx_expanded], dim=-1)
         
         # Predict
@@ -193,10 +190,11 @@ class AlpacaTrader:
             confidence = action_probs[0][action].item()
             
         current_price = df.iloc[-1]['Close']
-        logger.info(f"🧠 Brain Output: Action={action} ({['HOLD', 'BUY', 'SELL'][action]}), Conf={confidence:.2f} | Price: {current_price:.2f}")
+        action_names = ['HOLD', 'BUY', 'SELL']
+        logger.info(f"Brain Output: Action={action} ({action_names[action]}), Conf={confidence:.2f} | Price: {current_price:.2f}")
         
         # Execute
-        self.execute_order(action, current_pos, current_price, confidence)
+        self.execute_order(int(action), current_pos, current_price, confidence)
 
     def log_trade_to_csv(self, action, price, qty, confidence, position, pnl=None):
         """Appends trade details to a CSV file."""
@@ -212,7 +210,8 @@ class AlpacaTrader:
                 try:
                     acct = self.trading_client.get_account()
                     balance = float(acct.cash)
-                except:
+                except Exception as e:
+                    logger.warning(f"Could not fetch balance: {e}")
                     balance = 0.0
 
                 pnl_str = f"{pnl:.2f}" if pnl is not None else "0.00"
