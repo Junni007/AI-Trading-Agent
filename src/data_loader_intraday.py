@@ -42,7 +42,10 @@ class IntradayDataLoader:
         Fetches intraday data for a single ticker.
         """
         # Try Alpaca First
-        if self.alpaca_client and settings.DATA_PROVIDER == "alpaca":
+        # Skip Alpaca for Indian stocks (.NS, .BO) and indices (^NSEI, ^NSEBANK) as Alpaca only supports US equities
+        is_indian_stock = ticker.endswith('.NS') or ticker.endswith('.BO') or ticker.startswith('^NSE')
+        
+        if not is_indian_stock and self.alpaca_client and settings.DATA_PROVIDER == "alpaca":
             df = self._fetch_alpaca(ticker, interval)
             if df is not None and not df.empty:
                 return df
