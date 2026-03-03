@@ -134,7 +134,8 @@ class IntradayDataLoader:
                 period=period,
                 interval=interval,
                 progress=False,
-                threads=False
+                threads=False,
+                auto_adjust=False
             )
             
             if df is None or df.empty: return None

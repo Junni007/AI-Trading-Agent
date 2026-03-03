@@ -49,7 +49,7 @@ class MVPDataLoader:
             logger.info(f"Downloading chunk {i}-{i+len(chunk)}...")
             try:
                 # Group by Ticker to make extraction easier: df[Ticker] -> DataFrame
-                df = yf.download(chunk, start="2018-01-01", end="2025-01-01", group_by='ticker', auto_adjust=True, progress=False, threads=True)
+                df = yf.download(chunk, start="2018-01-01", end="2025-01-01", group_by='ticker', auto_adjust=False, progress=False, threads=True)
                 if not df.empty:
                     all_dfs.append(df)
             except Exception as e:
