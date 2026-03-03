@@ -69,3 +69,4 @@ best_hyperparameters.json
 *.pkl
 *.npy
 /src/__pycache__
+*.pyc
