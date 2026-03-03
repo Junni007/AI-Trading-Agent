@@ -184,17 +184,17 @@ app.add_middleware(
 API_KEY = os.getenv("API_KEY")
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
+# Security: Fail closed - if API_KEY is configured but env var is missing, deny all requests
 if not API_KEY:
-    logger.warning(
-        "API_KEY environment variable is not set. "
-        "Authentication is DISABLED. Set API_KEY for production deployments."
+    logger.error(
+        "FATAL: API_KEY environment variable is not set. "
+        "Refusing to start in insecure mode. Set API_KEY to enable the API."
     )
+    raise RuntimeError("API_KEY environment variable is required but not set. Exiting.")
 
 
 async def verify_api_key(key: str = Security(api_key_header)):
-    """Validate API key using constant-time comparison. Disabled when API_KEY env var is not set."""
-    if not API_KEY:
-        return  # Dev mode — no auth required (logged warning at startup)
+    """Validate API key using constant-time comparison. Always required in production."""
     if not key or not hmac.compare_digest(key.encode("utf-8"), API_KEY.encode("utf-8")):
         raise HTTPException(status_code=403, detail="Invalid or missing API key")
 

@@ -60,7 +60,8 @@ def _verify_ws_token(token: str | None) -> bool:
     """Check WebSocket auth token against API_KEY using constant-time comparison."""
     api_key = os.getenv("API_KEY")
     if not api_key:
-        return True  # Dev mode — no auth required
+        logger.error("WebSocket auth rejected: API_KEY not configured. Set API_KEY to enable.")
+        return False  # Fail closed - deny if not configured
     if not token:
         return False
     return hmac.compare_digest(token.encode("utf-8"), api_key.encode("utf-8"))
@@ -71,7 +72,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str | None = Query(def
     """
     WebSocket endpoint for real-time signal updates.
     Authenticate by passing ?token=<API_KEY> in the connection URL.
-    When API_KEY env var is not set, auth is disabled (dev mode).
+    API_KEY must be set in environment variables - auth cannot be disabled in production.
     """
     # Validate authentication
     if not _verify_ws_token(token):

@@ -103,16 +103,26 @@ class MVPDataLoader:
             # --- Returns ---
             df['Log_Return'] = np.log(df['Close'] / df['Close'].shift(1))
             
-            # 3. Target (Binary: Up=1, Down=0)
-            # Fixed threshold (0) instead of qcut to avoid data leakage.
-            # qcut computed bin edges on the ENTIRE dataset before train/test split,
-            # leaking future distribution info into training labels.
+            # 3. Target (3-class: Hold=0, Buy=1, Sell=2)
+            # Fixed threshold instead of qcut to avoid data leakage.
+            # Sell (2): return < -0.002 (down more than 0.2%)
+            # Hold (0): -0.002 <= return <= 0.002
+            # Buy (1): return > 0.002 (up more than 0.2%)
             future_ret = df['Log_Return'].shift(-1)
             mask = future_ret.notna()
-            df.loc[mask, 'Target'] = (future_ret[mask] > 0).astype(int)
+            
+            def classify_return(ret):
+                if ret > 0.002:
+                    return 1  # Buy
+                elif ret < -0.002:
+                    return 2  # Sell
+                else:
+                    return 0  # Hold
+            
+            df.loc[mask, 'Target'] = future_ret[mask].apply(classify_return)
             
             df.dropna(inplace=True)
-            df['Target'] = df['Target'].astype(int) 
+            df['Target'] = df['Target'].astype(int)
             
             # Select Final Feature Set
             self.feature_cols = ['RSI', 'MACD', 'MACD_Signal', 'Log_Return', 'Trend_Signal', 'ATR', 'Vol_Change']

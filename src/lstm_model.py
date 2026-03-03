@@ -23,8 +23,9 @@ class LSTMPredictor(pl.LightningModule):
         self.bn = nn.BatchNorm1d(hidden_dim) # Add Batch Norm for stability
         
         self.lr = lr
-        # Adjusted weights to be more aggressive against class imbalance if needed
-        self.loss_fn = nn.CrossEntropyLoss(weight=torch.tensor([1.2, 0.8, 1.2])) 
+        # 3-class: Hold(0), Buy(1), Sell(2)
+        # Weight: slightly penalize false buy signals (class 1) due to transaction costs
+        self.loss_fn = nn.CrossEntropyLoss(weight=torch.tensor([1.0, 1.2, 1.2]))
 
     def forward(self, x):
         # x shape: (batch, seq_len, features)

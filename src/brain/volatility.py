@@ -136,6 +136,10 @@ class VolatilityEngine:
         # Check if MultiIndex (Ticker, Price) or just (Price,)
         is_multi = isinstance(full_df.columns, pd.MultiIndex)
         
+        # Track success/failure for debugging
+        success_count = 0
+        fail_count = 0
+        
         for t in self.universe:
             try:
                 # Extract Ticker Data
@@ -143,16 +147,21 @@ class VolatilityEngine:
                     if t in full_df.columns.get_level_values(0):
                         df = full_df[t].copy()
                     else:
+                        fail_count += 1
                         continue # Ticker not in download
                 else:
-                    # Single ticker case
-                    if len(self.universe) == 1: df = full_df.copy()
-                    else: continue
+                    # Non-multi case: only valid if downloading single ticker
+                    # For bulk downloads, we should always get MultiIndex
+                    logger.warning(f"Unexpected non-MultiIndex DataFrame in VolatilityEngine. Check yfinance response.")
+                    df = full_df.copy()
                 
                 # Validation
-                if df.empty or 'Close' not in df.columns: continue
+                if df.empty or 'Close' not in df.columns: 
+                    fail_count += 1
+                    continue
 
                 vote = self.get_vote(t, df)
+                success_count += 1
                 
                 # Always append result (for Search visibility)
                 results.append({
@@ -163,9 +172,12 @@ class VolatilityEngine:
                     'HV_Rank': f"{vote.get('Reason').split('(')[1].split(')')[0]}" if '(' in vote['Reason'] else 'N/A'
                 })
             except Exception as e:
+                fail_count += 1
                 logger.error(f"Error scanning {t}: {e}")
                 continue
-                
+        
+        logger.info(f"Volatility scan complete: {success_count} succeeded, {fail_count} failed")
+        
         return results
 
 if __name__ == "__main__":

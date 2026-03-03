@@ -24,9 +24,10 @@ class RLExpert:
     """
 
     # Feature specification — single source of truth matching VectorizedTradingEnv
+    # 7 market features + 2 context features (Position, Balance)
     FEATURE_COLS = ['Returns', 'LogReturns', 'Volatility', 'Volume_Z', 'RSI', 'RSI_Rank', 'Momentum_Rank']
-    # The current checkpoint (best_ppo_light.npz) was trained with 7 features.
-    INPUT_DIM = len(FEATURE_COLS)  # Used to be + 2
+    CONTEXT_COLS = ['Position', 'Balance']  # Added context features
+    INPUT_DIM = len(FEATURE_COLS) + len(CONTEXT_COLS)  # 7 + 2 = 9
     OUTPUT_DIM = 3  # Hold, Buy, Sell
     HIDDEN_DIM = 256
     WINDOW_SIZE = 50

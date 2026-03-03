@@ -35,6 +35,11 @@ COPY --chown=appuser:appuser src/ src/
 # Copy checkpoint if it exists (optional — build won't fail if missing)
 COPY --chown=appuser:appuser checkpoints/best_ppo_light.np[z] checkpoints/
 
+# Create default config files if they don't exist (prevents Docker creating directories)
+# These are mounted volumes - if host files exist, they'll override these defaults
+RUN echo '{"default_api_mode": "auto", "scan_interval_minutes": 15}' > /app/settings.json && \
+    echo '{"balance": 10000, "positions": [], "history": []}' > /app/simulation_state.json
+
 # Switch to non-root user
 USER appuser
 

@@ -98,7 +98,7 @@ class TradingEnv(gym.Env):
              price_series = self.df['Close'] if 'Close' in self.df.columns else self.df.iloc[:, 0]
         else:
              price_series = self.df
-             
+              
         current_price = float(price_series.iloc[self.current_step])
         prev_net_worth = self.balance + self.position * current_price
         
@@ -134,32 +134,39 @@ class TradingEnv(gym.Env):
                 self.balance += proceeds - transaction_fee
                 self.position -= sell_amount
                 action_type = "SELL"
-                 
-        # Calculate Reward - Component Based (Verifiable)
-        current_net_worth = self.balance + self.position * current_price
+        
+        # Advance step FIRST, then calculate reward at the NEW price
+        # This ensures the reward captures actual price movement, not just transaction fees
+        self.current_step += 1
+        
+        terminated = self.current_step >= len(price_series) - 1
+        truncated = False
+        
+        # Get the new price AFTER the step advancement
+        if not terminated:
+            next_price = float(price_series.iloc[self.current_step])
+        else:
+            next_price = current_price  # End of episode
+        
+        # Calculate current_net_worth at the NEW price (captures price movement)
+        current_net_worth = self.balance + self.position * next_price
         self.net_worth_history.append(current_net_worth)
         
         reward = self._calculate_verifiable_reward(
             action_type, 
             prev_net_worth, 
             current_net_worth, 
-            current_price, 
+            next_price, 
             self.current_step
         )
-        
-        # Advance step
-        self.current_step += 1
-        
-        terminated = self.current_step >= len(price_series) - 1
-        truncated = False
         
         obs = self._next_observation() if not terminated else np.zeros(self.obs_shape, dtype=np.float32)
         info = {
             "net_worth": current_net_worth, 
-            "price": current_price,
+            "price": next_price,
             "reward": reward
         }
-        
+
         return obs, reward, terminated, truncated, info
 
     def _calculate_vol_targeted_position(self, net_worth, current_price, step_idx):
