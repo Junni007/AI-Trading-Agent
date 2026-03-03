@@ -85,8 +85,8 @@ def get_nifty500_tickers():
              
         df = pd.read_csv(csv_path)
         tickers = df['Symbol'].tolist()
-        # Add .NS and dedup
-        tickers = [f"{t}.NS" for t in tickers]
+        # Add .NS if missing and dedup
+        tickers = [t if t.endswith('.NS') else f"{t}.NS" for t in tickers]
         tickers = list(set(tickers))
         logger.info(f"Loaded {len(tickers)} Nifty 500 tickers from CSV.")
         return tickers
