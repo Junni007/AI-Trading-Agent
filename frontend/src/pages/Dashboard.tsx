@@ -12,6 +12,7 @@ interface DashboardProps {
     loading: boolean;
     marketMood: string;
     lastUpdated?: string;
+    serverStartTime: number | null;
     simState: any;
     onResetSim: () => void;
     onScan: () => void;
@@ -22,7 +23,7 @@ interface DashboardProps {
 }
 
 
-export const Dashboard = ({ data, loading, marketMood, lastUpdated, simState, onResetSim, onScan, isAuto, isLocked, onDetails, logs }: DashboardProps) => {
+export const Dashboard = ({ data, loading, marketMood, lastUpdated, serverStartTime, simState, onResetSim, onScan, isAuto, isLocked, onDetails, logs }: DashboardProps) => {
     const [filter, setFilter] = useState<'all' | 'opportunities' | 'watch'>('all');
     const [searchQuery, setSearchQuery] = useState('');
 
@@ -53,6 +54,7 @@ export const Dashboard = ({ data, loading, marketMood, lastUpdated, simState, on
                 isLocked={isLocked}
                 marketMood={marketMood}
                 lastUpdated={lastUpdated}
+                serverStartTime={serverStartTime}
             />
 
             <SimulationPanel simState={simState} onReset={onResetSim} />

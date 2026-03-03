@@ -8,34 +8,28 @@ interface HeroProps {
     isLocked?: boolean;
     marketMood: string;
     lastUpdated?: string;
+    serverStartTime: number | null;
 }
 
-export const Hero = ({ onScan, loading, isAuto, isLocked, marketMood, lastUpdated }: HeroProps) => {
+export const Hero = ({ onScan, loading, isAuto, isLocked, marketMood, lastUpdated, serverStartTime }: HeroProps) => {
 
     // Track active time with persistence
     const [activeTime, setActiveTime] = useState(0);
 
     useEffect(() => {
-        const STORAGE_KEY = 'signal_engine_start_time';
-
-        // Get or set the start timestamp
-        let startTime = localStorage.getItem(STORAGE_KEY);
-        if (!startTime) {
-            startTime = Date.now().toString();
-            localStorage.setItem(STORAGE_KEY, startTime);
-        }
+        if (!serverStartTime) return;
 
         // Update every second
         const updateTime = () => {
-            const elapsed = Math.floor((Date.now() - parseInt(startTime!)) / 1000);
-            setActiveTime(elapsed);
+            const elapsed = Math.floor((Date.now() - serverStartTime) / 1000);
+            setActiveTime(elapsed > 0 ? elapsed : 0);
         };
 
         updateTime();
         const interval = setInterval(updateTime, 1000);
 
         return () => clearInterval(interval);
-    }, []);
+    }, [serverStartTime]);
 
     // Format active time as Xd HH:MM:SS
     const formatTime = (seconds: number) => {

@@ -49,6 +49,7 @@ function AppContent() {
     const [logs, setLogs] = useState<string[]>([]);
     const [isConnected, setIsConnected] = useState(true);
     const [connectionDismissed, setConnectionDismissed] = useState(false);
+    const [serverStartTime, setServerStartTime] = useState<number | null>(null);
 
     // Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -63,7 +64,7 @@ function AppContent() {
 
     const { addToast } = useToast();
 
-    // Fetch initial Sim State
+    // Fetch initial Sim State and Uptime
     useEffect(() => {
         api.get('/api/simulation/state')
             .then(res => {
@@ -74,6 +75,16 @@ function AppContent() {
                 console.error(err);
                 setIsConnected(false);
             });
+
+        // Fetch official backend uptime
+        api.get('/api/health')
+            .then(res => {
+                if (res.data?.uptime) {
+                    const startTs = Date.now() - (res.data.uptime * 1000);
+                    setServerStartTime(startTs);
+                }
+            })
+            .catch(err => console.error("Could not fetch uptime:", err));
     }, []);
 
     // Keep loading state accessible inside interval without stale closure
@@ -218,6 +229,7 @@ function AppContent() {
                             loading={loading}
                             marketMood={marketMood}
                             lastUpdated={lastUpdated}
+                            serverStartTime={serverStartTime}
                             onScan={() => {
                                 if (isLocked) return;
                                 setIsAuto(!isAuto);
