@@ -133,12 +133,16 @@ async def global_exception_handler(request: Request, exc: Exception):
 # ─── CORS Configuration ─────────────────────────────────────────────────────
 
 # Robust parsing: handle commas, spaces, and accidental quotes
-headers_env = os.getenv(
-    "CORS_ORIGINS",
-    "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:3000",
-)
+_default_origins = "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:3000"
+headers_env = os.getenv("CORS_ORIGINS", _default_origins)
+
+# Also accept FRONTEND_URL as a convenience env var (common in PaaS deployments)
+frontend_url = os.getenv("FRONTEND_URL", "")
+if frontend_url:
+    headers_env = f"{headers_env},{frontend_url}"
+
 CORS_ORIGINS = [
-    origin.strip().strip('"').strip("'")
+    origin.strip().strip('"').strip("'").rstrip("/")
     for origin in headers_env.split(",")
     if origin.strip()
 ]
@@ -334,4 +338,5 @@ def save_settings(payload: SettingsPayload):
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.getenv("PORT", "8000"))
+    uvicorn.run(app, host="0.0.0.0", port=port)
