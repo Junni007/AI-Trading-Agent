@@ -29,10 +29,10 @@ Each expert (`SniperEngine`, `VolatilityEngine`, `RLExpert`, `QuantExpert`) retu
 ```
 
 **Source Files:**
-- [intraday.py](file:///c:/Users/Junni-Adi/Documents/GitHub/tradeing%20agent/src/brain/intraday.py) - Sniper Expert
-- [volatility.py](file:///c:/Users/Junni-Adi/Documents/GitHub/tradeing%20agent/src/brain/volatility.py) - Volatility Expert
-- [rl_expert.py](file:///c:/Users/Junni-Adi/Documents/GitHub/tradeing%20agent/src/brain/rl_expert.py) - RL Expert
-- [quant_expert.py](file:///c:/Users/Junni-Adi/Documents/GitHub/tradeing%20agent/src/brain/quant_expert.py) - Quant Expert
+- [intraday.py](../src/brain/intraday.py) - Sniper Expert
+- [volatility.py](../src/brain/volatility.py) - Volatility Expert
+- [rl_expert.py](../src/brain/rl_expert.py) - RL Expert
+- [quant_expert.py](../src/brain/quant_expert.py) - Quant Expert
 
 ---
 
@@ -69,7 +69,7 @@ The `HybridBrain` aggregates expert votes into an enriched decision:
 ```
 
 **Source File:**
-- [hybrid.py](file:///c:/Users/Junni-Adi/Documents/GitHub/tradeing%20agent/src/brain/hybrid.py)
+- [hybrid.py](../src/brain/hybrid.py)
 
 ---
 
@@ -92,8 +92,8 @@ Supervised fine-tuning data from ZigZag hindsight labeling:
 4. Extract TDA features for each labeled point
 
 **Source Files:**
-- [data_labeler.py](file:///c:/Users/Junni-Adi/Documents/GitHub/tradeing%20agent/src/data_labeler.py)
-- [sft_dataset.py](file:///c:/Users/Junni-Adi/Documents/GitHub/tradeing%20agent/src/sft_dataset.py)
+- [data_labeler.py](../src/data_labeler.py)
+- [sft_dataset.py](../src/sft_dataset.py)
 
 ---
 
@@ -118,8 +118,8 @@ reward = r_pnl + r_trend + r_holding_cost
 ```
 
 **Source Files:**
-- [agent.py](file:///c:/Users/Junni-Adi/Documents/GitHub/tradeing%20agent/src/agent.py) - TradingAgent class
-- [env.py](file:///c:/Users/Junni-Adi/Documents/GitHub/tradeing%20agent/src/env.py) - TradingEnv
+- [agent.py](../src/agent.py) - TradingAgent class
+- [env.py](../src/env.py) - TradingEnv
 
 ---
 
@@ -146,7 +146,7 @@ features = processor.compute(price_array)  # Shape: [window, 6]
 ```
 
 **Source File:**
-- [tda_features.py](file:///c:/Users/Junni-Adi/Documents/GitHub/tradeing%20agent/src/tda_features.py)
+- [tda_features.py](../src/tda_features.py)
 
 ---
 
@@ -173,8 +173,8 @@ df = loader.fetch_data()  # Returns engineered DataFrame
 ```
 
 **Source Files:**
-- [data_loader.py](file:///c:/Users/Junni-Adi/Documents/GitHub/tradeing%20agent/src/data_loader.py)
-- [data_loader_intraday.py](file:///c:/Users/Junni-Adi/Documents/GitHub/tradeing%20agent/src/data_loader_intraday.py)
+- [data_loader.py](../src/data_loader.py)
+- [data_loader_intraday.py](../src/data_loader_intraday.py)
 
 ---
 
@@ -203,7 +203,7 @@ From `backtest.py`:
 - **Profit Factor**: `sum(positive_returns) / abs(sum(negative_returns))`
 
 **Source File:**
-- [backtest.py](file:///c:/Users/Junni-Adi/Documents/GitHub/tradeing%20agent/src/backtest.py)
+- [backtest.py](../src/backtest.py)
 
 ---
 
@@ -297,7 +297,7 @@ Runs backtest on specified ticker
 ```
 
 **Source File:**
-- [src/api/main.py](file:///c:/Users/Junni-Adi/Documents/GitHub/tradeing%20agent/src/api/main.py)
+- [src/api/main.py](../src/api/main.py)
 
 ---
 
