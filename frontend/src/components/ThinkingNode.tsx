@@ -105,7 +105,7 @@ export const ThinkingNode: React.FC<ThinkingNodeProps> = ({ ticker, regime, acti
                                 AI
                             </span>
                         )}
-                        {quant && (
+                        {quant && quant.WinRate !== undefined && (
                             <span className={`signal-badge ${quant.WinRate > 0.5 ? 'bg-sage/10 text-sage border-sage/20' : 'bg-crimson/10 text-crimson border-crimson/20'}`}>
                                 {(quant.WinRate * 100).toFixed(0)}%
                             </span>

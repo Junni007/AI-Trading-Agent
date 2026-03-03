@@ -145,6 +145,7 @@ class HybridBrain:
                 decision['ContextDF'] = df # Pass DF for Quant
                 candidates.append(decision)
             
+            # ALWAYS append to final decisions so the frontend Dashboard shows "Watching" state
             final_decisions.append(decision)
             
         # --- Level 2: The Funnel (Quant Expert) ---
