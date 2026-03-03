@@ -224,18 +224,45 @@ def health_check():
 
 # ─── Thread-Safe State Store ─────────────────────────────────────────────────
 
+SCAN_RESULTS_FILE = Path(__file__).parent.parent.parent / "scan_results.json"
+
 @dataclass
 class ScanState:
-    """Thread-safe container for scan results. All access goes through lock."""
+    """Thread-safe container for scan results. Persists to disk for server restarts."""
     decisions: List = field(default_factory=list)
     logs: List = field(default_factory=list)
     is_scanning: bool = False
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
+    def __post_init__(self):
+        self._load_from_disk()
+
+    def _load_from_disk(self):
+        """Load last scan results from disk on startup."""
+        if SCAN_RESULTS_FILE.exists():
+            try:
+                data = json.loads(SCAN_RESULTS_FILE.read_text(encoding="utf-8"))
+                self.decisions = data.get("decisions", [])
+                self.logs = data.get("logs", [])
+                logger.info(f"Loaded {len(self.decisions)} previous scan results from disk.")
+            except (json.JSONDecodeError, OSError) as e:
+                logger.warning(f"Failed to load scan results: {e}")
+
+    def _save_to_disk(self):
+        """Persist scan results to disk."""
+        try:
+            SCAN_RESULTS_FILE.write_text(
+                json.dumps({"decisions": self.decisions, "logs": self.logs}, indent=2),
+                encoding="utf-8"
+            )
+        except OSError as e:
+            logger.warning(f"Failed to save scan results: {e}")
+
     def update(self, decisions: list, logs: list):
         with self._lock:
             self.decisions = decisions
             self.logs = logs
+            self._save_to_disk()
 
     def read(self):
         with self._lock:
