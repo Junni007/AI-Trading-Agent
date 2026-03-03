@@ -91,8 +91,9 @@ class SniperEngine:
         
         def process_ticker(t):
             original_t = t
-            # Correct L&T Ticker
-            if t == "L&T.NS": t = "LT.NS"
+            # Normalize ticker for Yahoo Finance compatibility (e.g. L&T.NS -> LT.NS)
+            from src.ticker_utils import normalize_ticker
+            t = normalize_ticker(t)
 
             df = self.loader.fetch_data(t, interval='15m')
             df = self.loader.add_technical_indicators(df)

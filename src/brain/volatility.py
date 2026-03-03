@@ -1,3 +1,4 @@
+import time
 import pandas as pd
 import numpy as np
 import logging
@@ -7,6 +8,16 @@ from src.ticker_utils import get_extended_tickers
 # Configure Logger
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger('IncomeExpert')
+
+# Module-level daily data cache — shared across VolatilityEngine instances.
+# Daily OHLCV data only changes once per trading day, so re-downloading
+# 500 tickers x 7 years every 5-minute scan cycle is wasteful.
+_daily_cache = {
+    'data': None,       # pd.DataFrame (MultiIndex)
+    'fetched_at': 0.0,  # time.time() when last fetched
+    'tickers': [],      # tickers used for this download
+}
+_DAILY_CACHE_TTL = 4 * 3600  # 4 hours in seconds
 
 class VolatilityEngine:
     """
@@ -94,13 +105,33 @@ class VolatilityEngine:
     def run_scan(self):
         """
         Scans universe for Volatility Regimes.
+        Uses module-level cache for daily data (TTL: 4 hours).
+        Daily OHLCV changes once per day — no need to re-download every 5-min cycle.
         """
+        global _daily_cache
         results = []
         logger.info(f"Scanning {len(self.universe)} tickers for Income/Vol Setups...")
         
-        # Initialize Loader with Universe
-        loader = MVPDataLoader(tickers=self.universe)
-        full_df = loader.fetch_batch_data()
+        now = time.time()
+        cache_age = now - _daily_cache['fetched_at']
+        cache_valid = (
+            _daily_cache['data'] is not None
+            and cache_age < _DAILY_CACHE_TTL
+            and set(self.universe) == set(_daily_cache['tickers'])
+        )
+        
+        if cache_valid:
+            logger.info(f"Using cached daily data (age: {cache_age/60:.0f} min)")
+            full_df = _daily_cache['data']
+        else:
+            logger.info("Cache miss — downloading fresh daily data...")
+            loader = MVPDataLoader(tickers=self.universe)
+            full_df = loader.fetch_batch_data()
+            _daily_cache = {
+                'data': full_df,
+                'fetched_at': now,
+                'tickers': list(self.universe),
+            }
         
         # Check if MultiIndex (Ticker, Price) or just (Price,)
         is_multi = isinstance(full_df.columns, pd.MultiIndex)

@@ -59,6 +59,7 @@ class HybridBrain:
             # RL Inference (On-Demand)
             # Fetch DF from Sniper Loader (which has cache) to avoid re-fetching
             # Hack: Access loader from sniper expert
+            df = None
             try:
                 # We need features. Sniper loader returns DF with indicators.
                 df = self.sniper_expert.loader.fetch_data(t, interval='15m')
@@ -71,13 +72,22 @@ class HybridBrain:
             except Exception as e:
                 rl_vote = {'Signal': 'ERROR', 'Confidence': 0.0, 'Reason': str(e)}
 
+            # Extract current price — SimulationEngine.process_tick() needs this
+            current_price = 0.0
+            try:
+                if df is not None and not df.empty and 'Close' in df.columns:
+                    current_price = round(float(df['Close'].iloc[-1]), 2)
+            except Exception:
+                pass
+
             # --- Consensus Logic (Level 1) ---
             decision = {
                 'Ticker': t,
                 'Action': 'WAIT',
                 'Confidence': 0.0,
                 'Rational': [],
-                'QuantRisk': None
+                'QuantRisk': None,
+                'Price': current_price,
             }
             
             # Base Confidence from Heuristics

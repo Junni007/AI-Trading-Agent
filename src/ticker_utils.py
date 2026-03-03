@@ -3,6 +3,30 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Known NSE symbol → Yahoo Finance symbol mappings.
+# Most NSE tickers with '&' work fine on Yahoo, but some have alternate symbols.
+# This table is checked by normalize_ticker() before any data fetch.
+_YAHOO_SYMBOL_MAP = {
+    "L&T.NS": "LT.NS",
+    # Add future mappings here as discovered
+}
+
+# Reverse map (Yahoo → display)
+_DISPLAY_SYMBOL_MAP = {v: k for k, v in _YAHOO_SYMBOL_MAP.items()}
+
+
+def normalize_ticker(ticker: str) -> str:
+    """Normalize a ticker to its Yahoo Finance-compatible symbol.
+    
+    Returns the mapped symbol if one exists, otherwise returns the original.
+    """
+    return _YAHOO_SYMBOL_MAP.get(ticker, ticker)
+
+
+def display_ticker(ticker: str) -> str:
+    """Convert a Yahoo-normalized ticker back to the original NSE symbol for display."""
+    return _DISPLAY_SYMBOL_MAP.get(ticker, ticker)
+
 def get_sp500_tickers():
     """Scrapes S&P 500 tickers from Wikipedia."""
     try:
@@ -75,12 +99,11 @@ def get_nifty500_tickers():
     Returns full Nifty 500 list from local CSV.
     FALLBACK: Returns core 100 list if CSV missing.
     """
+    import os
     csv_path = "src/nifty500.csv"
     try:
-        if not pd.io.common.file_exists(csv_path):
-             # Try absolute path based on execution context if needed, or relative
-             # But let's assume running from root.
-             import os
+        if not os.path.exists(csv_path):
+             # Try absolute path co-located with this module
              csv_path = os.path.join(os.path.dirname(__file__), "nifty500.csv")
              
         df = pd.read_csv(csv_path)

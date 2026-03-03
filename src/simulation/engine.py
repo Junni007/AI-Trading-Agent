@@ -37,7 +37,7 @@ class SimulationEngine:
             except (json.JSONDecodeError, OSError) as e:
                 logger.warning(f"Failed to load state: {e}")
                 # Try backup
-                backup_path = DB_PATH + ".bak"
+                backup_path = str(DB_PATH) + ".bak"
                 if os.path.exists(backup_path):
                     try:
                         with open(backup_path, 'r') as f:
@@ -53,7 +53,7 @@ class SimulationEngine:
         try:
             # Create backup of existing state before overwriting
             if os.path.exists(DB_PATH):
-                backup_path = DB_PATH + ".bak"
+                backup_path = str(DB_PATH) + ".bak"
                 try:
                     with open(DB_PATH, 'r') as src, open(backup_path, 'w') as dst:
                         dst.write(src.read())
@@ -106,7 +106,11 @@ class SimulationEngine:
             if ticker not in market_map: continue
             
             position = self.state['positions'][ticker]
-            current_price = market_map[ticker]['Price']
+            current_price = market_map[ticker].get('Price', 0)
+            
+            # Skip if price data unavailable — don't sell at 0
+            if current_price <= 0:
+                continue
             
             entry = position['avg_price']
             qty = position['qty']

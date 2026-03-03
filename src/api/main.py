@@ -18,10 +18,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 import uvicorn
+from contextlib import asynccontextmanager
 
 from src.brain.hybrid import HybridBrain
 from src.simulation.engine import SimulationEngine
 from src.api.websocket import router as ws_router, broadcast_update
+from src.scheduler import start_scheduler, stop_scheduler
 from src.api.schemas import (
     HealthResponse, HomeResponse, ScanTriggerResponse,
     ResultsResponse, ResetResponse, SettingsPayload, ErrorResponse,
@@ -102,7 +104,26 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
 # ─── App Init ────────────────────────────────────────────────────────────────
 
-app = FastAPI(title="Signal.Engine API", version="2.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup actions
+    logger.info("Initializing Signal.Engine...")
+    
+    # We wrap background_scan with asyncio.create_task inside a def so APScheduler can call it
+    def run_scan_job():
+        if not scan_state.is_scanning:
+            scan_state.set_scanning(True)
+            asyncio.create_task(background_scan())
+            
+    start_scheduler(run_scan_job)
+    
+    yield  # Normal running application state
+    
+    # Teardown actions
+    logger.info("Shutting down Signal.Engine...")
+    stop_scheduler()
+
+app = FastAPI(title="Signal.Engine API", version="2.0", lifespan=lifespan)
 
 # Trusted Host Middleware (single registration)
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
@@ -271,13 +292,13 @@ async def background_scan():
 
 @app.get("/api/scan", dependencies=[Depends(verify_api_key)], response_model=ScanTriggerResponse)
 async def run_scan():
-    """Triggers the Hybrid Brain to think in the background."""
+    """Manual trigger to force the Hybrid Brain to execute a scan out-of-band."""
     if scan_state.is_scanning:
         return {"status": "busy", "message": "Brain is already thinking."}
 
     scan_state.set_scanning(True)
     asyncio.create_task(background_scan())
-    return {"status": "started", "message": "Scan triggered in background."}
+    return {"status": "started", "message": "Manual scan cycle triggered in background."}
 
 @app.get("/api/results", dependencies=[Depends(verify_api_key)], response_model=ResultsResponse)
 def get_results():

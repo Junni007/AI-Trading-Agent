@@ -21,6 +21,7 @@ interface Decision {
     Action: string;
     Confidence: number;
     Rational: string[];
+    Price?: number;
     History?: any[];
     QuantRisk?: {
         WinRate: number;
@@ -92,11 +93,12 @@ function AppContent() {
     loadingRef.current = loading;
 
     // Stable real-time scan loop — interval is NOT recreated when loading changes
+    // 10s interval: brain takes 5-10 min per cycle, so 2s polling wasted ~150-300 requests.
     useEffect(() => {
         if (!isAuto) return;
         const interval: ReturnType<typeof setInterval> = setInterval(() => {
             if (!loadingRef.current) runScan(true);
-        }, 2000);
+        }, 10_000);
         return () => clearInterval(interval);
     }, [isAuto]);
 
