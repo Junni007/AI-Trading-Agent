@@ -67,13 +67,10 @@ Split deployment: React frontend on Vercel, Python API on Koyeb.
 ### Koyeb (Backend)
 
 1. **Connect your GitHub repo** to Koyeb.
-2. **Set Root Directory** to `/` (project root).
-3. **Set Build Command** (or `PIP_REQUIREMENTS_FILE` env var):
-   ```
-   pip install -r requirements-deploy.txt
-   ```
-   > This uses the lightweight file (~50MB) instead of `requirements.txt` (~2GB with torch).
-4. **Set Environment Variables** on Koyeb:
+2. **Switch to Docker deployment** (not Buildpack):
+   - Set **Dockerfile path** to `Dockerfile.koyeb`
+   - This uses `requirements-deploy.txt` (~300MB image vs ~4.5GB with torch)
+3. **Set Environment Variables** on Koyeb:
    ```
    FRONTEND_URL=https://your-app.vercel.app
    CORS_ORIGINS=http://localhost:5173,http://localhost:3000
@@ -82,8 +79,7 @@ Split deployment: React frontend on Vercel, Python API on Koyeb.
    ALPACA_SECRET_KEY=your_secret
    ```
    > `PORT` is auto-assigned by Koyeb — do NOT set it manually.
-5. **Deployment** uses the `Procfile` and `runtime.txt` automatically.
-6. **Health Check**: Set to `GET /api/health`.
+4. **Health Check**: Set to `GET /api/health`.
 
 ### Vercel (Frontend)
 
