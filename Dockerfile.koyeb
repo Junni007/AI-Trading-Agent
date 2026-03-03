@@ -20,10 +20,8 @@ RUN pip install --no-cache-dir -r requirements-deploy.txt
 
 # Copy only what the API runtime needs
 COPY src/ src/
-COPY simulation_state.json .
-COPY settings.json .
 
-# Copy checkpoint if it exists (numpy archive, ~1MB)
+# Copy checkpoint if it exists (using wildcard makes it optional so build doesn't fail)
 COPY checkpoints/best_ppo_light.np[z] checkpoints/
 
 # Koyeb assigns PORT dynamically
