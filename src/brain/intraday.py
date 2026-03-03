@@ -1,5 +1,6 @@
 import pandas as pd
 import logging
+import concurrent.futures
 from src.data_loader_intraday import IntradayDataLoader
 
 # Configure Logger
@@ -85,7 +86,11 @@ class SniperEngine:
         results = []
         logger.info(f"Scanning {len(self.universe)} tickers for Sniper Setups (15m)...")
         
-        for t in self.universe:
+        # Clear cache at start of a fresh scan
+        self.loader.cache.clear()
+        
+        def process_ticker(t):
+            original_t = t
             # Correct L&T Ticker
             if t == "L&T.NS": t = "LT.NS"
 
@@ -98,18 +103,25 @@ class SniperEngine:
             current_price = 0.0
             if df is not None and not df.empty:
                 try:
-                    current_price = df.iloc[-1]['Close']
-                except Exception:
-                    pass
+                    current_price = float(df.iloc[-1]['Close'])
+                except Exception as e:
+                    logger.debug(f"Could not extract price for {t}: {e}")
 
             # Always append result, even if Neutral (for Search visibility)
-            results.append({
-                'Ticker': t,
+            return {
+                'Ticker': original_t,
                 'Signal': vote['Signal'],
                 'Confidence': vote['Confidence'],
                 'Reason': vote['Reason'],
                 'Price': current_price
-            })
+            }
+            
+        # Use ThreadPoolExecutor to parallelize I/O bound yfinance downloads
+        with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+            # map guarantees iteration order
+            for res in executor.map(process_ticker, self.universe):
+                if res:
+                    results.append(res)
                 
         return results
 

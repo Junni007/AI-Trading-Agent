@@ -49,7 +49,8 @@ class MVPDataLoader:
             logger.info(f"Downloading chunk {i}-{i+len(chunk)}...")
             try:
                 # Group by Ticker to make extraction easier: df[Ticker] -> DataFrame
-                df = yf.download(chunk, start="2018-01-01", end="2025-01-01", group_by='ticker', auto_adjust=False, progress=False, threads=True)
+                # Use full required period for train/val/test splits
+                df = yf.download(chunk, start="2018-01-01", end="2025-12-31", group_by='ticker', auto_adjust=True, progress=False, threads=True)
                 if not df.empty:
                     all_dfs.append(df)
             except Exception as e:
@@ -139,55 +140,33 @@ class MVPDataLoader:
         signal_line = macd.ewm(span=signal, adjust=False).mean()
         return macd, signal_line
 
-    def create_sequences(self, df: pd.DataFrame, dataset_type: str = 'train') -> Tuple[np.ndarray, np.ndarray]:
+    def create_sequences(self, df: pd.DataFrame, dataset_type: str = 'train', scaler: StandardScaler = None) -> Tuple[np.ndarray, np.ndarray, Optional[StandardScaler]]:
         """
         Creates (X, y) sequences.
-        Normalizes data using Scaler fitted ONLY on TRAIN data (globally or per ticker? Globally is simpler for MVP).
+        Normalizes data using Scaler fitted ONLY on TRAIN data.
         """
-        if df.empty: return np.array([]), np.array([])
+        if df.empty: return np.array([]), np.array([]), None
         
         # FIX: Remove 'Close' price. It is non-stationary and scaling varies wildly between tickers.
-        # Using it prevents the model from learning general patterns across 500+ stocks.
         feature_cols = ['RSI', 'MACD', 'MACD_Signal', 'Log_Return', 'Trend_Signal', 'ATR', 'Vol_Change']
-        # Check if columns exist (handle subsets)
         available_cols = [c for c in feature_cols if c in df.columns]
         data = df[available_cols].values
         targets = df['Target'].values
         
-        # However, `self.scalers` is a single dict.
-        # Let's fit a NEW scaler for each ticker? Or reuse?
-        # Re-using a single global scaler for Price is bad.
-        # Let's switch to using Log-Returns for Price input or Z-Score Normalize PRICE per series.
-        # Decision: Create a local scaler for this sequence generation if training, but we need to save it for inference?
-        # Complex.
-        # Hack: Since this is "Large Model", let's assume we fit on the current DF passed in.
-        # In `get_data_splits`, if we concat DFs first, we lose ticker identity.
-        # If we loop tickers -> create seqs -> stack:
-        # We must normalize INSIDE the loop per ticker.
+        scaler_to_return = scaler
         
-        local_scaler = StandardScaler()
         if dataset_type == 'train':
+            local_scaler = StandardScaler()
             data = local_scaler.fit_transform(data)
-            # We can't easily save 50 scalers for inference in this simple MVP structure.
-            # But the user wants "Big Model".
-            # Compromise: For inference, we usually predict one ticker (AAPL).
-            # So training can use per-ticker normalization to learn patterns.
-            # We won't save all 50 scalers. We just discard them after creating X.
-            pass
+            scaler_to_return = local_scaler
         else:
-            # For Val/Test, we should technically use the scaler from that ticker's train set.
-            # This requires storing scalers by Ticker.
-            # Too complex for this codebase refactor right now.
-            # FALLBACK: Fit on self (transductive) or just fit on Train portion for that ticker.
-            # Let's just fit_transform on the passed df for normalization "locally" for now as an approximation, 
-            # or skip normalization of Price and rely on LogRet.
-            # Let's stick to: Fit on the passed data (which is a slice). 
-            # Correct way: pass the training scaler.
-            # Let's simplify: normalize per batch? No.
-            
-            # OK, Strict Logic:
-            # We will fit scaler on this function call. 
-            data = local_scaler.fit_transform(data) 
+            if scaler is not None:
+                data = scaler.transform(data)
+            else:
+                # Fallback if no scaler provided
+                local_scaler = StandardScaler()
+                data = local_scaler.fit_transform(data)
+                scaler_to_return = local_scaler
 
         X, y = [], []
         for i in range(self.window_size, len(data)):
@@ -195,7 +174,7 @@ class MVPDataLoader:
             X.append(seq_features)
             y.append(targets[i])
 
-        return np.array(X), np.array(y)
+        return np.array(X), np.array(y), scaler_to_return
 
     def get_data_splits(self):
         """
@@ -244,9 +223,9 @@ class MVPDataLoader:
                 test_mask = (df.index >= '2024-01-01')
                 
                 # Create Seqs
-                x_tr, y_tr = self.create_sequences(df[train_mask], 'train')
-                x_v, y_v = self.create_sequences(df[val_mask], 'val')
-                x_te, y_te = self.create_sequences(df[test_mask], 'test')
+                x_tr, y_tr, train_scaler = self.create_sequences(df[train_mask], 'train')
+                x_v, y_v, _ = self.create_sequences(df[val_mask], 'val', scaler=train_scaler)
+                x_te, y_te, _ = self.create_sequences(df[test_mask], 'test', scaler=train_scaler)
                 
                 if len(x_tr) > 0:
                     all_X_train.append(x_tr)
@@ -265,7 +244,7 @@ class MVPDataLoader:
         
         if processed_count == 0:
             # If no tickers processed successfully
-             logger.error("Zero tickers processed successfully.")
+            logger.error("Zero tickers processed successfully.")
         
         # Concatenate
         if not all_X_train: raise ValueError("No training data collected!")

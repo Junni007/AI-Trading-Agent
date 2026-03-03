@@ -41,18 +41,34 @@ class IntradayDataLoader:
         """
         Fetches intraday data for a single ticker.
         """
+        cache_key = f"{ticker}_{interval}_{period}"
+        if cache_key in self.cache:
+            entry_time, cached_df = self.cache[cache_key]
+            # 5-minute TTL to ensure fresh intraday data
+            if time.time() - entry_time < 300:
+                return cached_df.copy()
+            else:
+                del self.cache[cache_key]
+            
         # Try Alpaca First
         # Skip Alpaca for Indian stocks (.NS, .BO) and indices (^NSEI, ^NSEBANK) as Alpaca only supports US equities
         is_indian_stock = ticker.endswith('.NS') or ticker.endswith('.BO') or ticker.startswith('^NSE')
         
+        df = None
         if not is_indian_stock and self.alpaca_client and settings.DATA_PROVIDER == "alpaca":
             df = self._fetch_alpaca(ticker, interval)
-            if df is not None and not df.empty:
-                return df
-            logger.warning(f"Alpaca fetch failed for {ticker}. Falling back to yfinance.")
+            if df is None or df.empty:
+                logger.warning(f"Alpaca fetch failed for {ticker}. Falling back to yfinance.")
+                df = None
             
         # Fallback to yfinance
-        return self._fetch_yfinance(ticker, interval, period)
+        if df is None:
+            df = self._fetch_yfinance(ticker, interval, period)
+            
+        if df is not None and not df.empty:
+            self.cache[cache_key] = (time.time(), df.copy())
+            
+        return df
 
     def _fetch_alpaca(self, ticker: str, interval: str) -> Optional[pd.DataFrame]:
         try:
@@ -125,7 +141,11 @@ class IntradayDataLoader:
         """Legacy yfinance fetcher (Backup via yfinance)"""
         try:
             # Respect yfinance constraints
-            if interval == '1m' and int(period[:-1]) > 7:
+            import re
+            match = re.search(r'\d+', period)
+            numeric_days = int(match.group()) if match else 7
+            
+            if interval == '1m' and numeric_days > 7:
                 period = '7d'
             
             # Download
@@ -135,7 +155,7 @@ class IntradayDataLoader:
                 interval=interval,
                 progress=False,
                 threads=False,
-                auto_adjust=False
+                auto_adjust=True
             )
             
             if df is None or df.empty: return None
@@ -169,14 +189,18 @@ class IntradayDataLoader:
         # 1. VWAP
         v = df['Volume']
         tp = (df['High'] + df['Low'] + df['Close']) / 3
-        df['VWAP'] = (tp * v).cumsum() / v.cumsum()
+        cum_v = v.cumsum()
+        cum_v_safe = cum_v.replace(0, np.nan)
+        df['VWAP'] = (tp * v).cumsum() / cum_v_safe
         
         # 2. RSI (14)
         delta = df['Close'].diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-        rs = gain / loss
+        loss_safe = loss.replace(0, np.nan)
+        rs = gain / loss_safe
         df['RSI'] = 100 - (100 / (1 + rs))
+        df['RSI'] = df['RSI'].fillna(100) # fill with 100 where loss was 0
         
         # 3. ATR (14)
         high_low = df['High'] - df['Low']
@@ -188,7 +212,8 @@ class IntradayDataLoader:
         # 4. Volume Z-Score
         vol_mean = df['Volume'].rolling(window=20).mean()
         vol_std = df['Volume'].rolling(window=20).std()
-        df['Vol_Z'] = (df['Volume'] - vol_mean) / vol_std
+        vol_std_safe = vol_std.replace(0, np.nan)
+        df['Vol_Z'] = ((df['Volume'] - vol_mean) / vol_std_safe).fillna(0)
         
         # 5. MACD (12, 26, 9) - Required for RL
         exp1 = df['Close'].ewm(span=12, adjust=False).mean()
