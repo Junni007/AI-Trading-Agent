@@ -91,6 +91,8 @@ function AppContent() {
     // Keep loading state accessible inside interval without stale closure
     const loadingRef = useRef(loading);
     loadingRef.current = loading;
+    const isConnectedRef = useRef(isConnected);
+    isConnectedRef.current = isConnected;
 
     // Stable real-time scan loop — interval is NOT recreated when loading changes
     // 10s interval: brain takes 5-10 min per cycle, so 2s polling wasted ~150-300 requests.
@@ -126,10 +128,10 @@ function AppContent() {
     const runScan = async (silent = false) => {
         if (!silent) setLoading(true);
         try {
-            await api.get('/api/scan');
+            // Only pull the latest results from the background APScheduler
             const res = await api.get('/api/results');
 
-            if (!isConnected) {
+            if (!isConnectedRef.current) {
                 setIsConnected(true);
                 setConnectionDismissed(false);
                 addToast('success', 'Connection restored');
@@ -157,7 +159,7 @@ function AppContent() {
             }
         } catch (err) {
             console.error("Failed to fetch brain data", err);
-            if (isConnected) {
+            if (isConnectedRef.current) {
                 setIsConnected(false);
                 setConnectionDismissed(false);
             }

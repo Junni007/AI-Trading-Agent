@@ -48,6 +48,11 @@ class SimulationEngine:
             for k, v in defaults.items():
                 if k not in data:
                     data[k] = v
+                    
+            # Wipe corrupted history strings from older versions
+            if data["history"] and isinstance(data["history"][0], str):
+                data["history"] = []
+                
             return data
             
         if os.path.exists(DB_PATH):
@@ -172,7 +177,22 @@ class SimulationEngine:
                 
                 # Log
                 log_entry = f"{action} {ticker} @ {current_price}. PnL: {pnl_pct:.2f}%. Reward: {reward} pts."
-                self.state['history'].insert(0, log_entry)
+                
+                # Frontend-compatible dict
+                current_port_val = self.state['cash'] + sum([
+                    pos['qty'] * market_map.get(t, {'Price': pos['avg_price']}).get('Price', pos['avg_price']) 
+                    for t, pos in self.state['positions'].items()
+                ])
+                trade_record = {
+                    "action": action,
+                    "ticker": ticker,
+                    "price": current_price,
+                    "port_value": current_port_val,
+                    "prev_port_value": self.state['balance'],
+                    "timestamp": datetime.now().isoformat()
+                }
+                
+                self.state['history'].insert(0, trade_record)
                 logs.append(log_entry)
         
         # 2. KeyLogic: Open New Positions
@@ -230,7 +250,22 @@ class SimulationEngine:
                             "avg_price": price
                         }
                         log_entry = f"BOUGHT {ticker} @ {price}. Conf: {adjusted_conf:.2f} (Risk: {level})"
-                        self.state['history'].insert(0, log_entry)
+                        
+                        current_port_val = self.state['cash'] + sum([
+                            pos['qty'] * market_map.get(t, {'Price': pos['avg_price']}).get('Price', pos['avg_price']) 
+                            for t, pos in self.state['positions'].items()
+                        ])
+                        
+                        trade_record = {
+                            "action": "BUY",
+                            "ticker": ticker,
+                            "price": price,
+                            "port_value": current_port_val,
+                            "prev_port_value": self.state['balance'],
+                            "timestamp": datetime.now().isoformat()
+                        }
+                        
+                        self.state['history'].insert(0, trade_record)
                         logs.append(log_entry)
 
         # Final Balance Update
