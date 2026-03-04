@@ -32,13 +32,13 @@ class MVPDataLoader:
         # TDA Processor (can be heavy, may want to disable for massive data if too slow)
         # self.tda_processor = FeatureProcessor(embedding_dim=3, embedding_delay=1) # Disabled
 
-    def fetch_batch_data(self) -> pd.DataFrame:
+    def fetch_batch_data(self, period="2y") -> pd.DataFrame:
         """
         Downloads data for ALL tickers in parallel (Much faster).
         Returns a MultiIndex DataFrame (Price, Ticker).
         """
         if not self.tickers: return pd.DataFrame()
-        logger.info(f"Batch downloading {len(self.tickers)} tickers (2018-2025)...")
+        logger.info(f"Batch downloading {len(self.tickers)} tickers ({period})...")
         
         # Chunking downloads to avoid URI too long errors or rate limits for huge lists
         chunk_size = 100
@@ -50,7 +50,7 @@ class MVPDataLoader:
             try:
                 # Group by Ticker to make extraction easier: df[Ticker] -> DataFrame
                 # Use full required period for train/val/test splits
-                df = yf.download(chunk, start="2018-01-01", end="2025-12-31", group_by='ticker', auto_adjust=True, progress=False, threads=True)
+                df = yf.download(chunk, period=period, group_by='ticker', auto_adjust=True, progress=False, threads=True)
                 if not df.empty:
                     all_dfs.append(df)
             except Exception as e:

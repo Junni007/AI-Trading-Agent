@@ -92,7 +92,7 @@ class SniperEngine:
         # Prefetch batch data to prevent rate limits and speed up threads
         from src.ticker_utils import normalize_ticker
         normalized_universe = [normalize_ticker(t) for t in self.universe]
-        self.loader.prefetch_batch(normalized_universe, interval='15m', period='59d')
+        self.loader.prefetch_batch(normalized_universe, interval='15m', period='5d')
         
         def process_ticker(t):
             original_t = t

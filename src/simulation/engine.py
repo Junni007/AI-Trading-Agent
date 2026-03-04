@@ -31,8 +31,23 @@ class SimulationEngine:
         
     def load_state(self):
         def _sanitize(data):
-            if data and isinstance(data.get("positions"), list):
+            if not data: return data
+            if isinstance(data.get("positions"), list):
                 data["positions"] = {}
+                
+            # Self-heal missing keys from older schema or corruptions
+            defaults = {
+                "balance": 10000.0,
+                "cash": 10000.0,
+                "positions": {},
+                "history": [],
+                "score": 0,
+                "level": "Novice (Risk Taker)",
+                "status": "ALIVE"
+            }
+            for k, v in defaults.items():
+                if k not in data:
+                    data[k] = v
             return data
             
         if os.path.exists(DB_PATH):

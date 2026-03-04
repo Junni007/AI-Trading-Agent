@@ -23,7 +23,7 @@ class HybridBrain:
         self.rl_expert = RLExpert()
         
         # Level 2: Deep Quant
-        self.quant_expert = QuantExpert(num_paths=5000) # 5k paths for speed vs accuracy balance
+        self.quant_expert = QuantExpert(num_paths=1000) # Capped at 1k paths to avoid 100% CPU exhaustion on Koyeb
         
     def think(self):
         """
@@ -160,8 +160,12 @@ class HybridBrain:
             
         # --- Level 2: The Funnel (Quant Expert) ---
         if candidates:
-            logger.info(f"🧪 Running Quant Simulation on {len(candidates)} candidates...")
-            for cand in candidates:
+            # Sort by confidence to only evaluate the best setups and save CPU!
+            candidates.sort(key=lambda x: x['Confidence'], reverse=True)
+            quant_batch = candidates[:50] # Limit to top 50 to prevent Koyeb server memory/CPU crashing
+            
+            logger.info(f"🧪 Running Quant Simulation on top {len(quant_batch)} candidates (out of {len(candidates)} total)...")
+            for cand in quant_batch:
                 q_res = self.quant_expert.get_probability(cand['Ticker'], cand.get('ContextDF', None))
                 
                 # Append Quant Insights
