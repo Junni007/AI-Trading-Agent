@@ -129,33 +129,11 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Signal.Engine API", version="2.0", lifespan=lifespan)
 
-# Trusted Host Middleware (single registration)
-app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
-
-# Middleware stack (order: request ID -> security headers -> rate limit -> CORS)
-app.add_middleware(RequestIdMiddleware)
-app.add_middleware(SecurityHeadersMiddleware)
-app.add_middleware(RateLimitMiddleware, calls_per_minute=120)
-
-
-# ─── Global Exception Handler ────────────────────────────────────────────────
-
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    """Catch unhandled exceptions and return a safe error response."""
-    request_id = getattr(request.state, "request_id", None)
-    logger.error(f"Unhandled exception [request_id={request_id}]: {exc}", exc_info=True)
-    return JSONResponse(
-        status_code=500,
-        content={
-            "error": "Internal server error",
-            "request_id": request_id,
-            "detail": None,  # Never leak internal details
-        },
-    )
-
-
 # ─── CORS Configuration ─────────────────────────────────────────────────────
+# IMPORTANT: CORS must be the FIRST middleware added so it is the outermost
+# ASGI layer. In Starlette, add_middleware() uses LIFO ordering — the first
+# middleware added wraps everything else, meaning it sees the request first.
+# If CORS is added after rate-limiting, OPTIONS preflights never get answered.
 
 # Robust parsing: handle commas, spaces, and accidental quotes
 _default_origins = "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:3000"
@@ -181,6 +159,29 @@ app.add_middleware(
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type", "X-API-Key", "X-Request-ID"],
 )
+
+# Remaining middleware (applied after CORS in the LIFO stack)
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
+app.add_middleware(RequestIdMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RateLimitMiddleware, calls_per_minute=120)
+
+
+# ─── Global Exception Handler ────────────────────────────────────────────────
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Catch unhandled exceptions and return a safe error response."""
+    request_id = getattr(request.state, "request_id", None)
+    logger.error(f"Unhandled exception [request_id={request_id}]: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "Internal server error",
+            "request_id": request_id,
+            "detail": None,  # Never leak internal details
+        },
+    )
 
 
 # ─── API Key Authentication (Constant-Time Comparison) ───────────────────────
