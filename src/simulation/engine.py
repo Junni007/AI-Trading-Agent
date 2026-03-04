@@ -30,10 +30,15 @@ class SimulationEngine:
         }
         
     def load_state(self):
+        def _sanitize(data):
+            if data and isinstance(data.get("positions"), list):
+                data["positions"] = {}
+            return data
+            
         if os.path.exists(DB_PATH):
             try:
                 with open(DB_PATH, 'r') as f:
-                    return json.load(f)
+                    return _sanitize(json.load(f))
             except (json.JSONDecodeError, OSError) as e:
                 logger.warning(f"Failed to load state: {e}")
                 # Try backup
@@ -42,7 +47,7 @@ class SimulationEngine:
                     try:
                         with open(backup_path, 'r') as f:
                             logger.info("Recovered state from backup file.")
-                            return json.load(f)
+                            return _sanitize(json.load(f))
                     except Exception:
                         pass
                 return None
