@@ -89,6 +89,11 @@ class SniperEngine:
         # Clear cache at start of a fresh scan
         self.loader.cache.clear()
         
+        # Prefetch batch data to prevent rate limits and speed up threads
+        from src.ticker_utils import normalize_ticker
+        normalized_universe = [normalize_ticker(t) for t in self.universe]
+        self.loader.prefetch_batch(normalized_universe, interval='15m', period='59d')
+        
         def process_ticker(t):
             original_t = t
             # Normalize ticker for Yahoo Finance compatibility (e.g. L&T.NS -> LT.NS)

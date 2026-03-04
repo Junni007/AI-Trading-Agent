@@ -70,6 +70,66 @@ class IntradayDataLoader:
             
         return df
 
+    def prefetch_batch(self, tickers: list, interval: str = '15m', period: str = '59d'):
+        """
+        Optimized batch download to avoid hitting yfinance timeouts by pulling 500 individual 15m data files sequentially.
+        Populates the instance cache natively.
+        """
+        import yfinance as yf
+        import re
+        
+        original_period = period
+        # Respect yfinance constraints
+        match = re.search(r'\d+', period)
+        numeric_days = int(match.group()) if match else 7
+        if interval == '1m' and numeric_days > 7:
+            period = '7d'
+
+        logger.info(f"Batch pre-fetching {len(tickers)} tickers for {interval} intraday...")
+        
+        chunk_size = 100
+        for i in range(0, len(tickers), chunk_size):
+            chunk = tickers[i:i+chunk_size]
+            logger.info(f"Downloading Intraday chunk {i}-{i+len(chunk)}...")
+            try:
+                data = yf.download(
+                    tickers=" ".join(chunk),
+                    period=period,
+                    interval=interval,
+                    progress=False,
+                    threads=True,
+                    auto_adjust=True
+                )
+                
+                if data is None or data.empty:
+                    continue
+                    
+                # Store grouped data frame columns per ticker individually in cache
+                for ticker in chunk:
+                    if isinstance(data.columns, pd.MultiIndex):
+                        if ticker in data.columns.get_level_values(1):
+                            ticker_df = data.xs(ticker, level=1, axis=1)
+                        else:
+                            continue
+                    else:
+                        ticker_df = data
+
+                    ticker_df = ticker_df.dropna(how='all')
+                    if not ticker_df.empty:
+                        required = ['Open', 'High', 'Low', 'Close', 'Volume']
+                        valid = True
+                        for c in required:
+                            if c not in ticker_df.columns:
+                                valid = False
+                                break
+                            ticker_df[c] = pd.to_numeric(ticker_df[c], errors='coerce')
+                        if valid:
+                            ticker_df.dropna(subset=required, inplace=True)
+                            cache_key = f"{ticker}_{interval}_{original_period}"
+                            self.cache[cache_key] = (time.time(), ticker_df[required])
+            except Exception as e:
+                logger.error(f"Batch fetch chunk error: {e}")
+
     def _fetch_alpaca(self, ticker: str, interval: str) -> Optional[pd.DataFrame]:
         try:
             # Map interval string to TimeFrame

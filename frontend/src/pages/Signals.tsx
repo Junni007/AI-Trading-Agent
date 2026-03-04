@@ -209,7 +209,7 @@ export const Signals = ({ data, loading = false, onDetails }: SignalsProps) => {
                                             <div className="flex items-center gap-3">
                                                 <div className="w-20 h-1.5 bg-graphite/50 rounded-full overflow-hidden">
                                                     <div
-                                                        className={`h-full rounded-full transition-all duration-500 ${item.Confidence >= 0.8 ? 'bg-sage' : item.Confidence >= 0.6 ? 'bg-amber' : 'bg-iron'
+                                                        className={`h-full rounded-full transition-all duration-500 ${item.Confidence >= 0.8 ? 'bg-sage' : item.Confidence >= 0.55 ? 'bg-amber' : 'bg-iron'
                                                             }`}
                                                         style={{ width: `${item.Confidence * 100}%` }}
                                                     />
@@ -285,7 +285,7 @@ export const Signals = ({ data, loading = false, onDetails }: SignalsProps) => {
                                         <div className="font-mono text-amber font-bold">{(item.Confidence * 100).toFixed(0)}%</div>
                                         <div className="w-16 h-1.5 bg-graphite/50 rounded-full overflow-hidden mt-1">
                                             <div
-                                                className={`h-full rounded-full ${item.Confidence >= 0.8 ? 'bg-sage' : item.Confidence >= 0.6 ? 'bg-amber' : 'bg-iron'}`}
+                                                className={`h-full rounded-full ${item.Confidence >= 0.8 ? 'bg-sage' : item.Confidence >= 0.55 ? 'bg-amber' : 'bg-iron'}`}
                                                 style={{ width: `${item.Confidence * 100}%` }}
                                             />
                                         </div>

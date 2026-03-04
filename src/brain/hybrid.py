@@ -150,8 +150,8 @@ class HybridBrain:
                 logger.debug(f"Failed to build history for {t}: {e}")
                 decision['History'] = []
 
-            # Add to Candidate List if Conf > 0.6
-            if decision['Confidence'] >= 0.6:
+            # Add to Candidate List if Conf >= 0.55
+            if decision['Confidence'] >= 0.55:
                 decision['ContextDF'] = df # Pass DF for Quant
                 candidates.append(decision)
             
