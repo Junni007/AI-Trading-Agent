@@ -112,7 +112,7 @@ export const Analytics = ({ simState, marketData = [] }: AnalyticsProps) => {
                     <div className="pr-6 border-r border-white/5">
                         <div className="text-xs text-smoke font-mono mb-1 uppercase tracking-wider">Total Balance</div>
                         <div className="text-3xl font-mono font-bold text-chalk tracking-tight">
-                            ${currentBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            ₹{currentBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </div>
                     </div>
                     <div className="pl-6 flex flex-col justify-center">
@@ -154,11 +154,11 @@ export const Analytics = ({ simState, marketData = [] }: AnalyticsProps) => {
                                     </defs>
                                     <CartesianGrid strokeDasharray="3 3" stroke="#2A2A32" vertical={false} />
                                     <XAxis dataKey="name" stroke="#52525B" fontSize={10} tickLine={false} axisLine={false} dy={10} />
-                                    <YAxis stroke="#52525B" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `$${v.toLocaleString()}`} dx={-10} domain={['auto', 'auto']} />
+                                    <YAxis stroke="#52525B" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `₹${v.toLocaleString('en-IN')}`} dx={-10} domain={['auto', 'auto']} />
                                     <Tooltip
                                         contentStyle={{ backgroundColor: '#141418', borderColor: '#2A2A32', borderRadius: '12px', color: '#F5F5F5', fontFamily: 'JetBrains Mono', fontSize: '13px', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.5)' }}
                                         itemStyle={{ color: '#F59E0B', fontWeight: 'bold' }}
-                                        formatter={(value: number) => [`$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 'Portfolio Value']}
+                                        formatter={(value: number) => [`₹${value.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 'Portfolio Value']}
                                     />
                                     <Area type="monotone" dataKey="value" stroke="#F59E0B" strokeWidth={3} fill="url(#equityGrad)" activeDot={{ r: 6, fill: '#F59E0B', stroke: '#1D1D24', strokeWidth: 3 }} />
                                 </AreaChart>
@@ -232,10 +232,10 @@ export const Analytics = ({ simState, marketData = [] }: AnalyticsProps) => {
                                                 <div className="font-bold text-chalk text-sm group-hover:text-amber transition-colors">{pos.ticker}</div>
                                             </td>
                                             <td className="p-4 font-mono text-sm text-smoke">{pos.qty}</td>
-                                            <td className="p-4 font-mono text-sm text-smoke">${pos.avg_price.toFixed(2)}</td>
+                                            <td className="p-4 font-mono text-sm text-smoke">₹{pos.avg_price.toFixed(2)}</td>
                                             <td className="p-4 text-right">
                                                 <div className={`font-mono text-sm font-bold ${pos.pnl >= 0 ? 'text-sage' : 'text-crimson'}`}>
-                                                    {pos.pnl >= 0 ? '+' : ''}${pos.pnl.toFixed(2)}
+                                                    {pos.pnl >= 0 ? '+' : ''}₹{pos.pnl.toFixed(2)}
                                                 </div>
                                                 <div className={`font-mono text-xs ${pos.pnlPct >= 0 ? 'text-sage/70' : 'text-crimson/70'}`}>
                                                     {pos.pnlPct >= 0 ? '+' : ''}{pos.pnlPct.toFixed(2)}%
@@ -296,11 +296,11 @@ export const Analytics = ({ simState, marketData = [] }: AnalyticsProps) => {
                                                 </span>
                                             </div>
                                             <div className="flex justify-between items-end text-sm text-smoke mt-2">
-                                                <span className="font-mono">Executed @ ${trade.price?.toFixed(2)}</span>
+                                                <span className="font-mono">Executed @ ₹{trade.price?.toFixed(2)}</span>
                                                 <div className="text-right">
                                                     <div className="text-xs text-ash mb-0.5">Port Value</div>
                                                     <div className="font-mono font-semibold text-chalk">
-                                                        ${trade.port_value?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        ₹{trade.port_value?.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                     </div>
                                                 </div>
                                             </div>
