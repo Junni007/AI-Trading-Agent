@@ -117,12 +117,23 @@ class SniperEngine:
                 'Price': current_price
             }
             
-        # Use ThreadPoolExecutor to parallelize I/O bound yfinance downloads
-        with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
-            # map guarantees iteration order
-            for res in executor.map(process_ticker, self.universe):
-                if res:
-                    results.append(res)
+        # Use ThreadPoolExecutor to parallelize I/O bound yfinance/Alpaca downloads
+        # Reduced max_workers to 5 to prevent aggressive rate limiting timeouts from data endpoints
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            # We use a mapping over the universe
+            future_to_ticker = {executor.submit(process_ticker, t): t for t in self.universe}
+            
+            for future in concurrent.futures.as_completed(future_to_ticker):
+                try:
+                    res = future.result(timeout=90)
+                    if res:
+                        results.append(res)
+                except concurrent.futures.TimeoutError:
+                    ticker = future_to_ticker[future]
+                    logger.warning(f"Timeout processing {ticker} intraday signals. Skipping.")
+                except Exception as exc:
+                    ticker = future_to_ticker[future]
+                    logger.debug(f"{ticker} generated an exception: {exc}")
                 
         return results
 
