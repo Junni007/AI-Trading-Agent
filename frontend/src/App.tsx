@@ -247,7 +247,7 @@ function AppContent() {
                         />
                     } />
                     <Route path="/signals" element={<Signals data={data} loading={loading} onDetails={openDetails} />} />
-                    <Route path="/analytics" element={<Analytics simState={simState} />} />
+                    <Route path="/analytics" element={<Analytics simState={simState} marketData={data} />} />
                     <Route path="/settings" element={<Settings />} />
                     <Route path="*" element={
                         <div className="flex-grow flex flex-col items-center justify-center py-32 text-center">

@@ -239,17 +239,33 @@ class SimulationEngine:
                              "SNIPER" in item.get('Signal', ''))
                              
             if (adjusted_conf >= threshold) and is_buy_signal:
-                allocation = self.state['balance'] * 0.20
-                if self.state['cash'] > allocation:
-                    qty = int(allocation / price)
-                    if qty > 0:
-                        cost = qty * price
+                # Dynamic Trade Sizing based on Confidence and Available Cash
+                alloc_pct = 0.25 # Apprentice/Novice default
+                if adjusted_conf >= 0.90:
+                    alloc_pct = 0.80 # Wolf tier
+                elif adjusted_conf >= 0.70:
+                    alloc_pct = 0.50 # Pro tier
+                    
+                allocation = self.state['cash'] * alloc_pct
+                qty = int(allocation / price)
+                
+                # Liquidity Guard: If standard allocation can't buy 1 share, but we have enough cash.
+                # Still honour the risk-tier cap — never spend more than alloc_pct of available cash.
+                if qty == 0 and self.state['cash'] >= price:
+                    max_qty_alloc = int((self.state['cash'] * alloc_pct) / price)
+                    if max_qty_alloc > 0:
+                        qty = min(int((self.state['cash'] * 0.95) / price), max_qty_alloc)
+                    # else: skip — even the tier allocation can't cover one share
+                
+                if qty > 0:
+                    cost = qty * price
+                    if self.state['cash'] >= cost:
                         self.state['cash'] -= cost
                         self.state['positions'][ticker] = {
                             "qty": qty,
                             "avg_price": price
                         }
-                        log_entry = f"BOUGHT {ticker} @ {price}. Conf: {adjusted_conf:.2f} (Risk: {level})"
+                        log_entry = f"BOUGHT {qty}x {ticker} @ {price}. Conf: {adjusted_conf:.2f} (Risk: {level})"
                         
                         current_port_val = self.state['cash'] + sum([
                             pos['qty'] * market_map.get(t, {'Price': pos['avg_price']}).get('Price', pos['avg_price']) 
