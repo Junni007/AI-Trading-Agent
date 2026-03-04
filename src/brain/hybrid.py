@@ -162,7 +162,7 @@ class HybridBrain:
         if candidates:
             logger.info(f"🧪 Running Quant Simulation on {len(candidates)} candidates...")
             for cand in candidates:
-                q_res = self.quant_expert.get_probability(cand['Ticker'], cand.pop('ContextDF', None))
+                q_res = self.quant_expert.get_probability(cand['Ticker'], cand.get('ContextDF', None))
                 
                 # Append Quant Insights
                 cand['Rational'].append(f"Monte Carlo: {q_res['WinRate']*100:.1f}% Win Prob")

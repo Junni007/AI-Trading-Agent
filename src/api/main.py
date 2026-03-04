@@ -109,11 +109,15 @@ async def lifespan(app: FastAPI):
     # Startup actions
     logger.info("Initializing Signal.Engine...")
     
-    # We wrap background_scan with asyncio.create_task inside a def so APScheduler can call it
+    # Capture the main FastAPI event loop so the scheduler thread can push tasks to it
+    loop = asyncio.get_running_loop()
+    
+    # We wrap background_scan with asyncio.create_task inside a def so APScheduler can call it safely
     def run_scan_job():
         if not scan_state.is_scanning:
             scan_state.set_scanning(True)
-            asyncio.create_task(background_scan())
+            # Schedule the coroutine safely from the scheduler's background thread
+            asyncio.run_coroutine_threadsafe(background_scan(), loop)
             
     start_scheduler(run_scan_job)
     
