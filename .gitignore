@@ -72,3 +72,5 @@ best_hyperparameters.json
 *.pyc
 *.pyc
 *.pyc
+*.bak
+simulation_state.json
