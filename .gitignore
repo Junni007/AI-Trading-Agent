@@ -70,3 +70,5 @@ best_hyperparameters.json
 *.npy
 /src/__pycache__
 *.pyc
+*.pyc
+*.pyc

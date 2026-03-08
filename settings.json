@@ -1,5 +1,5 @@
 {
   "universe": "nifty50",
-  "confidenceThreshold": 53,
+  "confidenceThreshold": 75,
   "maxPositions": 5
 }
